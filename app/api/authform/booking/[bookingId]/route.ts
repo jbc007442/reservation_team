@@ -23,7 +23,9 @@ export async function GET(
 
     const authForm = await AuthForm.findOne({
       bookingId,
-    });
+    }).populate('notes.addedBy', 'name email');
+
+
 
     if (!authForm) {
       return NextResponse.json(

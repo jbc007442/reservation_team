@@ -143,12 +143,29 @@ const NoteSchema = new Schema(
       default: false,
     },
 
-    attachment: {
-      fileName: String,
-      fileUrl: String,
-      mimeType: String,
-      fileSize: Number,
-    },
+    attachments: [
+      {
+        fileName: {
+          type: String,
+          trim: true,
+        },
+
+        fileUrl: {
+          type: String,
+          trim: true,
+        },
+
+        mimeType: {
+          type: String,
+          trim: true,
+        },
+
+        fileSize: {
+          type: Number,
+          default: 0,
+        },
+      },
+    ],
 
     updatedAt: Date,
 

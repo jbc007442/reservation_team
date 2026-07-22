@@ -222,7 +222,7 @@ export default function BookingsPage() {
         <BookingTable />
       </Card>
 
-      <BookingDialog open={open} onClose={handleClose} booking={selectedBooking} />
+      <BookingDialog open={open} onClose={handleClose} onSuccess={handleClose} booking={selectedBooking} />
     </div>
   );
 }

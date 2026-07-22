@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 
 import { Booking } from '@/components/user/booking/types';
+import NotePost from './NotePost';
 
 const statusConfig: Record<
   Booking['status'],
@@ -225,18 +226,7 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
 
         <Divider className="my-4" />
 
-        {/* Notes */}
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="m-0 text-sm font-semibold text-slate-800">Notes</h3>
-
-            <Button type="primary" size="small" icon={<PlusOutlined />}>
-              Add
-            </Button>
-          </div>
-
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No Notes" />
-        </div>
+        <NotePost/>
       </Card>
     </div>
   );
