@@ -1,26 +1,129 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+/* Add to globals.css */
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg-app: #fcfcfd;
+    --sidebar-bg: #ffffff;
+    --border-color: #e4e7ec;
+    --text-primary: #101828;
+    --text-secondary: #475467;
+    --accent: #1a1a1a;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+
+ /* Phone Input Styles */
+.PhoneInputWrapper {
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: 0.3s;
+  background: #fff;
+}
+
+.PhoneInputWrapper:focus-within {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15);
+}
+
+.PhoneInput {
+  display: flex;
+  align-items: center;
+}
+
+.PhoneInputInput {
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 14px;
+  background: transparent;
+}
+
+.PhoneInputCountry {
+  margin-right: 10px;
+}
+
+
+
+
+
+
+/* iterneriery */
+
+.pnr-itinerary table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.pnr-itinerary th,
+.pnr-itinerary td {
+  border: 1px solid #d9d9d9;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.pnr-itinerary th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.pnr-itinerary tr:nth-child(even) {
+  background: #fcfcfc;
+}
+
+.pnr-itinerary h1,
+.pnr-itinerary h2,
+.pnr-itinerary h3,
+.pnr-itinerary h4 {
+  margin-bottom: 12px;
+}
+
+.pnr-itinerary p {
+  margin-bottom: 10px;
+}
+
+
+
+.itinerary-preview {
+  width: 100%;
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.itinerary-preview table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  min-width: 900px;
+}
+
+.itinerary-preview td,
+.itinerary-preview th {
+  padding: 10px 12px !important;
+  border: 1px solid #e5e7eb !important;
+  vertical-align: middle;
+  white-space: normal;
+  font-size: 14px;
+}
+
+.itinerary-preview img {
+  max-height: 32px;
+  max-width: 100%;
+}
+
+.itinerary-preview p {
+  margin-bottom: 8px;
+}
+
+.itinerary-preview h1,
+.itinerary-preview h2,
+.itinerary-preview h3,
+.itinerary-preview h4 {
+  margin-bottom: 12px;
+}
+
+.itinerary-preview * {
+  max-width: 100%;
 }
