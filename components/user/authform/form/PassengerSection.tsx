@@ -23,7 +23,7 @@ export default function PassengerSection({
           <Col xs={24} md={4}>
             <Form.Item label={index === 0 ? 'Salutation' : `Salutation ${index + 1}`}>
               <Select
-                placeholder="Select"
+                placeholder="Select Salutation"
                 value={passenger.title || 'Mr.'}
                 onChange={(value) => updatePassenger(index, 'title', value)}
                 options={[
@@ -39,43 +39,57 @@ export default function PassengerSection({
           </Col>
 
           {/* First Name */}
-          <Col xs={24} md={6}>
+          <Col xs={24} md={4}>
             <Form.Item label={index === 0 ? 'First Name' : `First Name ${index + 1}`}>
               <Input
                 placeholder="First Name"
-                value={passenger.firstName || (index === 0 ? (customerName[0] ?? '') : '')}
+                value={passenger.firstName}
                 onChange={(e) => updatePassenger(index, 'firstName', e.target.value)}
               />
             </Form.Item>
           </Col>
 
           {/* Last Name */}
-          <Col xs={24} md={6}>
+          <Col xs={24} md={4}>
             <Form.Item label={index === 0 ? 'Last Name' : `Last Name ${index + 1}`}>
               <Input
                 placeholder="Last Name"
-                value={passenger.lastName || (index === 0 ? customerName.slice(1).join(' ') : '')}
+                value={passenger.lastName}
                 onChange={(e) => updatePassenger(index, 'lastName', e.target.value)}
+              />
+            </Form.Item>
+          </Col>
+
+          {/* Gender */}
+          <Col xs={24} md={4}>
+            <Form.Item label={index === 0 ? 'Gender' : `Gender ${index + 1}`}>
+              <Select
+                placeholder="Select Gender"
+                value={passenger.gender || 'Male'}
+                onChange={(value) => updatePassenger(index, 'gender', value)}
+                options={[
+                  { label: 'Male', value: 'Male' },
+                  { label: 'Female', value: 'Female' },
+                  { label: 'Other', value: 'Other' },
+                ]}
               />
             </Form.Item>
           </Col>
 
           {/* DOB */}
           <Col xs={24} md={6}>
-            <Form.Item label={index === 0 ? 'DOB' : `DOB ${index + 1}`}>
+            <Form.Item label={index === 0 ? 'Date of Birth' : `Date of Birth ${index + 1}`}>
               <DatePicker
                 className="w-full"
                 format="DD-MM-YYYY"
                 placeholder="Select DOB"
-                value={passenger.dob ? dayjs(passenger.dob, 'DD-MM-YYYY') : null}
-                onChange={(date) =>
-                  updatePassenger(index, 'dob', date ? date.format('DD-MM-YYYY') : '')
-                }
+                value={passenger.dob ? dayjs(passenger.dob) : null}
+                onChange={(date) => updatePassenger(index, 'dob', date ? date.toISOString() : '')}
               />
             </Form.Item>
           </Col>
 
-          {/* Delete */}
+          {/* Delete Button */}
           <Col xs={24} md={2}>
             <Form.Item label=" " colon={false}>
               {index > 0 && (

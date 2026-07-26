@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   CheckCircleOutlined,
@@ -28,6 +28,7 @@ interface TimelineItem {
   performedBy?: {
     _id: string;
     name: string;
+    email: string;
   };
 }
 
@@ -126,19 +127,33 @@ export default function History({ booking }: HistoryProps) {
             dot: getIcon(item.action),
 
             children: (
-              <>
-                <Text strong>{item.action}</Text>
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex-1">
+                  <Text strong>{item.action}</Text>
 
-                {item.description && <div className="text-slate-500 mt-1">{item.description}</div>}
+                  {item.description && (
+                    <div className="mt-1 text-slate-600">{item.description}</div>
+                  )}
 
-                {item.performedBy && (
-                  <div className="text-xs text-slate-500 mt-1">By: {item.performedBy.name}</div>
-                )}
-
-                <div className="text-xs text-slate-400 mt-1">
-                  {new Date(item.createdAt).toLocaleString()}
+                  <div className="mt-2 text-xs text-slate-400">
+                    {new Date(item.createdAt).toLocaleString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
                 </div>
-              </>
+
+                <div className="min-w-[180px] text-right">
+                  <div className="font-medium text-slate-800">
+                    {item.performedBy?.name || 'System'}
+                  </div>
+
+                  <div className="text-xs text-slate-500">{item.performedBy?.email || ''}</div>
+                </div>
+              </div>
             ),
           }))}
         />

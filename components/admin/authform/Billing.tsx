@@ -63,19 +63,27 @@ export default function Billing({ booking }: BillingProps) {
     loadPayments();
   }, [booking._id]);
 
+
   const loadPayments = async () => {
     try {
       setLoading(true);
 
       const res = await fetch(`/api/authform/billing/${booking._id}`);
-
       const result = await res.json();
 
-      if (!result.success) {
-        message.error(result.message);
+      // No AuthForm/Billing created yet
+      if (!result.data) {
+        setBookingInfo({
+          bookingReferenceNo: booking.bookingNo,
+          customer: '',
+        });
+
+        setCharges([]);
+        setPayments([]);
         return;
       }
 
+      // Existing Billing
       setBookingInfo({
         bookingReferenceNo: result.data.bookingReferenceNo || '',
         customer: result.data.customer
@@ -93,15 +101,10 @@ export default function Billing({ booking }: BillingProps) {
 
       const rows: PaymentItem[] = (result.data.cards || []).map((card: any, index: number) => ({
         key: String(index),
-
         cardEnding: card.cardNumber ? `****${card.cardNumber.slice(-4)}` : '-',
-
         cardHolder: card.cardHolderName || '-',
-
         amount: Number(card.amount || 0),
-
         transactionId: card.transactionId || '',
-
         status: card.paymentStatus || 'Pending',
       }));
 
@@ -121,6 +124,12 @@ export default function Billing({ booking }: BillingProps) {
     .reduce((sum, item) => sum + item.amount, 0);
 
   const balance = total - approved;
+
+  const paymentApproved =
+    payments.length > 0 &&
+    charges.length > 0 &&
+    balance === 0 &&
+    payments.every((item) => item.status === 'Approved');
 
   const handleTransactionChange = (key: string, value: string) => {
     setPayments((prev) =>
@@ -259,8 +268,8 @@ export default function Billing({ booking }: BillingProps) {
         <Descriptions.Item label="Customer">{bookingInfo.customer || '-'}</Descriptions.Item>
 
         <Descriptions.Item label="Payment Status">
-          <Tag color={balance === 0 ? 'green' : 'orange'}>
-            {balance === 0 ? 'Approved' : 'Pending'}
+          <Tag color={paymentApproved ? 'green' : 'orange'}>
+            {paymentApproved ? 'Approved' : 'Pending'}
           </Tag>
         </Descriptions.Item>
 
@@ -295,7 +304,7 @@ export default function Billing({ booking }: BillingProps) {
           </Descriptions.Item>
 
           <Descriptions.Item label="Overall Status">
-            {balance === 0 ? (
+            {paymentApproved ? (
               <Tag color="green" icon={<CheckCircleOutlined />}>
                 Payment Approved
               </Tag>

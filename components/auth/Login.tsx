@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { Button, Card, Divider, Input, Typography, message } from 'antd';
 
 import {
-  MailOutlined,
+  UserOutlined,
   LockOutlined,
   SafetyCertificateOutlined,
   LoginOutlined,
@@ -23,7 +23,7 @@ import { useAuthStore } from '@/store/authStore';
 const { Title, Text } = Typography;
 
 const schema = z.object({
-  email: z.email('Enter a valid email'),
+  name: z.string().min(3, 'Username is required'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
@@ -40,7 +40,7 @@ export default function Login() {
   } = useForm<LoginForm>({
     resolver: zodResolver(schema),
     defaultValues: {
-      email: '',
+      name: '',
       password: '',
     },
   });
@@ -100,21 +100,19 @@ export default function Login() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <Controller
-            name="email"
+            name="name"
             control={control}
             render={({ field }) => (
               <>
                 <Input
                   {...field}
                   size="large"
-                  placeholder="Email Address"
-                  prefix={<MailOutlined />}
-                  status={errors.email ? 'error' : ''}
+                  placeholder="Username"
+                  prefix={<UserOutlined />}
+                  status={errors.name ? 'error' : ''}
                 />
 
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
-                )}
+                {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name.message}</p>}
               </>
             )}
           />

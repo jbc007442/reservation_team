@@ -13,6 +13,7 @@ export interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   height?: number;
+  folder?: string;
 }
 
 export interface PassengerSectionProps {

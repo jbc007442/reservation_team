@@ -5,6 +5,7 @@ import { verifyToken } from '@/lib/jwt';
 
 import { connectDB } from '@/lib/mongodb';
 import Booking from '@/models/booking/Booking';
+import Counter from '@/models/booking/Counter';
 
 
 export async function GET(request: NextRequest) {
@@ -195,13 +196,21 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const body = await request.json();
+    const counter = await Counter.findOneAndUpdate(
+      { name: 'booking' },
+      { $inc: { seq: 1 } },
+      {
+        new: true,
+        upsert: true,
+      }
+    );
 
-    console.log('BODY:', body);
+    const bookingNo = `BK-${String(counter.seq).padStart(4, '0')}`;
 
-    const booking = await Booking.create(body);
-
-    console.log('BOOKING:', booking);
-
+    const booking = await Booking.create({
+      ...body,
+      bookingNo,
+    });
     return NextResponse.json(
       {
         success: true,

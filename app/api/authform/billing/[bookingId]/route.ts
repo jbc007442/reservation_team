@@ -26,13 +26,10 @@ export async function GET(
     const authForm = await AuthForm.findOne({ bookingId }).lean();
 
     if (!authForm) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Authorization Form not found.',
-        },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        success: true,
+        data: null,
+      });
     }
 
     return NextResponse.json({

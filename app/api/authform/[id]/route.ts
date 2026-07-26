@@ -115,33 +115,6 @@ export async function PATCH(
 
     const body = await req.json();
 
-    // If card information is updated, reset payment verification
-    if (body.cards) {
-      body.cards = body.cards.map((card: any) => ({
-        ...card,
-        transactionId: '',
-        paymentStatus: 'Pending',
-        paymentDate: null,
-        verifiedAt: null,
-        verifiedBy: null,
-      }));
-
-      body.billing = {
-        ...(body.billing || {}),
-        paymentStatus: 'pending',
-      };
-
-      body.timeline = [
-        ...(body.timeline || []),
-        {
-          action: 'Payment Reset',
-          description: 'Payment verification was reset because card details were modified.',
-          source: 'staff',
-          createdAt: new Date(),
-        },
-      ];
-    }
-
     const authForm = await AuthForm.findByIdAndUpdate(
       id,
       {

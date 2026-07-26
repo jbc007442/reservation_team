@@ -1,10 +1,11 @@
-import { Booking } from '@/components/user/booking/types';
+import { Booking } from '@/components/admin/booking/types';
 
 export interface Passenger {
   title: string;
   firstName: string;
   lastName: string;
-  dob: string;
+  gender: 'Male' | 'Female' | 'Other';
+  dob: string | null;
 }
 
 export interface RichTextEditorProps {
@@ -12,6 +13,7 @@ export interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   height?: number;
+  folder?: string;
 }
 
 export interface PassengerSectionProps {
@@ -19,7 +21,7 @@ export interface PassengerSectionProps {
   passengers: Passenger[];
   addPassenger: () => void;
   removePassenger: (index: number) => void;
-  updatePassenger: (index: number, field: keyof Passenger, value: string) => void;
+  updatePassenger: (index: number, field: keyof Passenger, value: string | null) => void;
 }
 
 export interface BookingTypeProps {

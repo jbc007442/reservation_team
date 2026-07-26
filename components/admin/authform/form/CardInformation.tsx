@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Card, Col, DatePicker, Form, Input, InputNumber, Radio, Row } from 'antd';
+import { Button, Card, Col, DatePicker, Form, Input, InputNumber, Radio, Row, message } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 
@@ -20,6 +20,7 @@ export interface CardInfo {
 interface CardInformationProps {
   value: CardInfo[];
   onChange: (cards: CardInfo[]) => void;
+  totalAmount: number;
 }
 
 const defaultCard: CardInfo = {
@@ -33,7 +34,7 @@ const defaultCard: CardInfo = {
   billingAddress: '',
 };
 
-export default function CardInformation({ value, onChange }: CardInformationProps) {
+export default function CardInformation({ value, onChange, totalAmount }: CardInformationProps) {
   const cards = value.length > 0 ? value : [{ ...defaultCard }];
 
   const addCard = () => {
@@ -45,16 +46,28 @@ export default function CardInformation({ value, onChange }: CardInformationProp
   };
 
   const updateCard = <K extends keyof CardInfo>(index: number, field: K, value: CardInfo[K]) => {
-    onChange(
-      cards.map((card, i) =>
-        i === index
-          ? {
-              ...card,
-              [field]: value,
-            }
-          : card
-      )
+    const updatedCards = cards.map((card, i) =>
+      i === index
+        ? {
+            ...card,
+            [field]: value,
+          }
+        : card
     );
+
+    if (field === 'amount') {
+      const totalCardAmount = updatedCards.reduce(
+        (sum, card) => sum + (Number(card.amount) || 0),
+        0
+      );
+
+      if (totalCardAmount > totalAmount) {
+        message.error(`Total card amount cannot exceed ${totalAmount}`);
+        return;
+      }
+    }
+
+    onChange(updatedCards);
   };
 
   return (
@@ -125,8 +138,8 @@ export default function CardInformation({ value, onChange }: CardInformationProp
                 <DatePicker
                   picker="month"
                   className="w-full"
-                  format="MMMM YYYY"
-                  placeholder="Select Month"
+                  format="MM/YYYY"
+                  placeholder="MM/YYYY"
                   value={card.expiryDate}
                   onChange={(date) => updateCard(index, 'expiryDate', date)}
                 />
@@ -147,16 +160,13 @@ export default function CardInformation({ value, onChange }: CardInformationProp
 
             <Col xs={24} md={12}>
               <Form.Item label="Amount">
-                <Input
-                  type="number"
+                <InputNumber
+                  className="w-full"
+                  min={0}
                   placeholder="Amount"
-                  value={card.amount ?? ''}
-                  onChange={(e) =>
-                    updateCard(
-                      index,
-                      'amount',
-                      e.target.value === '' ? null : Number(e.target.value)
-                    )
+                  value={card.amount}
+                  onChange={(value) =>
+                    updateCard(index, 'amount', value === null ? null : Number(value))
                   }
                 />
               </Form.Item>

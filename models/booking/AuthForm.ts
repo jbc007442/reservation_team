@@ -79,6 +79,8 @@ const MailHistorySchema = new Schema(
 
     subject: String,
 
+    html: String, // Email body (React Quill HTML)
+
     status: {
       type: String,
       enum: ['draft', 'sent', 'delivered', 'opened', 'failed'],
@@ -242,6 +244,10 @@ export interface IAuthForm extends Document {
 
   bookingDetails: string;
 
+  bookingDetailsType: 'image' | 'api';
+
+  itineraryData?: Record<string, any> | null;
+
   charges: unknown[];
 
   cards: unknown[];
@@ -293,6 +299,10 @@ export interface IAuthForm extends Document {
   notes: unknown[];
 
   timeline: unknown[];
+
+  createdAt: Date;
+
+  updatedAt: Date;
 }
 
 const AuthFormSchema = new Schema<IAuthForm>(
@@ -338,7 +348,21 @@ const AuthFormSchema = new Schema<IAuthForm>(
 
     content: String,
 
-    bookingDetails: String,
+    bookingDetails: {
+      type: String,
+      default: '',
+    },
+
+    bookingDetailsType: {
+      type: String,
+      enum: ['image', 'api'],
+      default: 'image',
+    },
+
+    itineraryData: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
 
     charges: [ChargeSchema],
 

@@ -55,8 +55,13 @@ export function authorizationTemplate({ authForm, approvalLink }: AuthorizationE
 <p>Dear <strong>${booking.customer.name}</strong>,</p>
 
 <p>
-Please review your booking details below. If everything is correct,
-click the <strong>Authorize Booking</strong> button.
+<div>We appreciate your trust in us for your upcoming journey. Please review the attached document carefully. If all details are correct, PLESE CLICK  “I authorize.”</div>
+
+<div>Total Price: $200.00 USD (including taxes and fees)</div>
+
+<div>Payment Method: VISA ending in 4977</div>
+
+<div>Note: Charges may appear as multiple transactions, but the total will remain $200.00 USD.</div>
 </p>
 
 <h3>Booking Information</h3>

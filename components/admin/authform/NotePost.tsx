@@ -62,9 +62,9 @@ export default function NotePost({ bookingId }: NotePostProps) {
 
       <Drawer
         title="Add Internal Note"
-        width={800}
+        size={800}
         open={open}
-        destroyOnClose
+        destroyOnHidden
         onClose={() => setOpen(false)}
         extra={
           <Space>

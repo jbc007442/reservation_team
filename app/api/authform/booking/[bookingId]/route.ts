@@ -25,16 +25,12 @@ export async function GET(
       bookingId,
     }).populate('notes.addedBy', 'name email');
 
-
-
+    // No AuthForm yet → normal for new bookings
     if (!authForm) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Authorization Form not found.',
-        },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        success: true,
+        data: null,
+      });
     }
 
     return NextResponse.json({

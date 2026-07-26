@@ -23,44 +23,34 @@ function generateEmployeeId(name: string) {
   return `EMP-${prefix}-${date}-${random}`;
 }
 
+
 export async function POST(req: NextRequest) {
   try {
     await connectDB();
 
-    const { name, email, phone, password } = await req.json();
+    const { name, password } = await req.json();
 
     // Validation
-    if (!name || !email || !phone || !password) {
+    if (!name || !password) {
       return NextResponse.json(
         {
           success: false,
-          message: 'All fields are required.',
+          message: 'Name and password are required.',
         },
         { status: 400 }
       );
     }
 
-    // Check Email
-    const existingEmail = await User.findOne({ email });
+    // Check Name
+    const existingUser = await User.findOne({
+      name: name.trim(),
+    });
 
-    if (existingEmail) {
+    if (existingUser) {
       return NextResponse.json(
         {
           success: false,
-          message: 'Email already exists.',
-        },
-        { status: 409 }
-      );
-    }
-
-    // Check Phone
-    const existingPhone = await User.findOne({ phone });
-
-    if (existingPhone) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Phone number already exists.',
+          message: 'Username already exists.',
         },
         { status: 409 }
       );
@@ -79,22 +69,18 @@ export async function POST(req: NextRequest) {
     // Create User
     const user = await User.create({
       employeeId,
-      name,
-      email,
-      phone,
+      name: name.trim(),
       password: hashedPassword,
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Registration successful.',
+        message: 'User created successfully.',
         user: {
           id: user._id,
           employeeId: user.employeeId,
           name: user.name,
-          email: user.email,
-          phone: user.phone,
           role: user.role,
           status: user.status,
         },

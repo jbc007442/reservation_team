@@ -5,17 +5,12 @@ import { z } from 'zod';
 import axios from 'axios';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
-import 'react-phone-number-input/style.css';
 import Link from 'next/link';
-
-
 import { Button, Card, Input, Typography, message, Divider } from 'antd';
 
 import {
   IdcardOutlined,
   UserOutlined,
-  MailOutlined,
   LockOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
@@ -24,11 +19,7 @@ const { Title, Text } = Typography;
 
 const schema = z.object({
   name: z.string().min(2, 'Name is required'),
-  email: z.email(),
-  phone: z.string().refine((value) => isValidPhoneNumber(value), {
-    message: 'Enter a valid phone number',
-  }),
-  password: z.string().min(6),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
 type RegisterForm = z.infer<typeof schema>;
@@ -43,8 +34,6 @@ export default function Register() {
     resolver: zodResolver(schema),
     defaultValues: {
       name: '',
-      email: '',
-      phone: '',
       password: '',
     },
   });
@@ -164,45 +153,7 @@ export default function Register() {
               </>
             )}
           />
-
-          <Controller
-            name="email"
-            control={control}
-            render={({ field }) => (
-              <>
-                <Input
-                  {...field}
-                  size="large"
-                  placeholder="Email Address"
-                  prefix={<MailOutlined />}
-                  status={errors.email ? 'error' : ''}
-                />
-              </>
-            )}
-          />
-
-          <Controller
-            name="phone"
-            control={control}
-            render={({ field }) => (
-              <>
-                <div className="PhoneInputWrapper">
-                  <PhoneInput
-                    international
-                    defaultCountry="IN"
-                    countryCallingCodeEditable={false}
-                    placeholder="Enter phone number"
-                    value={field.value}
-                    onChange={(value) => field.onChange(value || '')}
-                  />
-                </div>
-
-                {errors.phone && (
-                  <p className="mt-1 text-sm text-red-500">{errors.phone.message}</p>
-                )}
-              </>
-            )}
-          />
+   
 
           <Controller
             name="password"

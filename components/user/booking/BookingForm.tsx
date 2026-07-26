@@ -115,7 +115,6 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
 
       // Only while creating a new booking
       if (!isEdit) {
-        payload.bookingNo = `BK${Date.now()}`;
         payload.createdBy = user?._id;
       }
 

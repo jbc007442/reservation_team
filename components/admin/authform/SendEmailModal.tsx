@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Col, Form, Input, Modal, Row, message } from 'antd';
+import { Col, Form, Input, Modal, Row, message, Space } from 'antd';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
+import { useAuthStore } from '@/store/authStore';
 
 interface SendEmailModalProps {
   open: boolean;
   onClose: () => void;
+  bookingId: string;
   bookingNo: string;
   email: string;
   customerName: string;
@@ -16,25 +18,15 @@ interface SendEmailModalProps {
 export default function SendEmailModal({
   open,
   onClose,
+  bookingId,
   bookingNo,
   email,
   customerName,
 }: SendEmailModalProps) {
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
-
-  const [content, setContent] = useState(`
-    <p>Dear ${customerName},</p>
-
-    <p>Thank you for choosing us.</p>
-
-    <p>Your booking has been confirmed.</p>
-
-    <br/>
-
-    <p>Regards,</p>
-    <p><strong>Travel Team</strong></p>
-  `);
+  const [content, setContent] = useState('');
 
   const modules = {
     toolbar: [
@@ -54,21 +46,39 @@ export default function SendEmailModal({
 
       setLoading(true);
 
-      console.log({
-        from: 'crontex123@gmail.com',
-        to: values.to,
-        cc: values.cc,
-        bcc: values.bcc,
-        subject: values.subject,
-        html: content,
-        bookingNo,
+      const res = await fetch('/api/authform/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId,
+
+          performedBy: user?._id,
+
+          to: values.to,
+
+          cc: values.cc ? values.cc.split(',').map((v: string) => v.trim()) : [],
+
+          bcc: values.bcc ? values.bcc.split(',').map((v: string) => v.trim()) : [],
+
+          subject: values.subject,
+
+          html: content,
+        }),
       });
 
-      message.success('Email data captured. API will be added later.');
+      const result = await res.json();
+
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+
+      message.success(result.message);
 
       onClose();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      message.error(err.message);
     } finally {
       setLoading(false);
     }

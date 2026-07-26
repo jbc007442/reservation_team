@@ -121,6 +121,7 @@ export default function Header({ booking }: HeaderProps) {
       <SendEmailModal
         open={emailOpen}
         onClose={() => setEmailOpen(false)}
+        bookingId={booking._id}
         bookingNo={booking.bookingNo}
         email={booking.customer.email ?? ''}
         customerName={booking.customer.name}

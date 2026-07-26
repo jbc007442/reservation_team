@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button, Card, Col, Form, Row, Space, message } from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
 
 import EmailInfo from './EmailInfo';
 import PassengerSection from './PassengerSection';
 import BookingType from './BookingType';
 import ServiceType from './ServiceType';
 import RichTextEditor from './RichTextEditor';
+import BookingDetails from './BookingDetails';
 import Charges, { ChargeItem } from './Charges';
 import CardInformation, { CardInfo } from './CardInformation';
 import TermsConditions from './TermsConditions';
@@ -29,54 +31,216 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const [form] = Form.useForm();
 
   const [content, setContent] = useState('');
-  const [bookingDetails, setBookingDetails] = useState('');
+  const [bookingImage, setBookingImage] = useState<UploadFile | null>(null);
   const [, setBookingType] = useState<string>();
   const [terms, setTerms] = useState<string>(termsTemplates.Flight);
   const [charges, setCharges] = useState<ChargeItem[]>([]);
   const [cards, setCards] = useState<CardInfo[]>([]);
+  const totalAmount = charges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const [loading, setLoading] = useState(false);
+  const [authFormId, setAuthFormId] = useState<string | null>(null);
+  const customerName = booking.customer.name.trim().split(' ');
 
- const [passengers, setPassengers] = useState<Passenger[]>([
-   {
-     title: 'Mr.',
-     firstName: '',
-     lastName: '',
-     dob: '',
-   },
- ]);
+  const [passengers, setPassengers] = useState<Passenger[]>([
+    {
+      title: 'Mr.',
+      firstName: customerName[0] ?? '',
+      lastName: customerName.slice(1).join(' '),
+      gender: 'Male',
+      dob: '',
+    },
+  ]);
 
- const addPassenger = () => {
-   setPassengers((prev) => [
-     ...prev,
-     {
-       title: 'Mr.',
-       firstName: '',
-       lastName: '',
-       dob: '',
-     },
-   ]);
- };
+  useEffect(() => {
+    console.log('Passengers Changed:', JSON.stringify(passengers, null, 2));
+  }, [passengers]);
 
- const removePassenger = (index: number) => {
-   setPassengers((prev) => prev.filter((_, i) => i !== index));
- };
+  const addPassenger = () => {
+    setPassengers((prev) => [
+      ...prev,
+      {
+        title: 'Mr.',
+        firstName: '',
+        lastName: '',
+        gender: 'Male',
+        dob: '',
+      },
+    ]);
+  };
 
- const updatePassenger = (index: number, field: keyof Passenger, value: string) => {
-   setPassengers((prev) =>
-     prev.map((passenger, i) =>
-       i === index
-         ? {
-             ...passenger,
-             [field]: value,
-           }
-         : passenger
-     )
-   );
- };
+  const removePassenger = (index: number) => {
+    setPassengers((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updatePassenger = (index: number, field: keyof Passenger, value: string | null) => {
+    const normalizedValue = value ?? '';
+
+    setPassengers((prev) => {
+      const updated = prev.map((passenger, i) =>
+        i === index
+          ? {
+              ...passenger,
+              [field]: normalizedValue,
+            }
+          : passenger
+      );
+
+      console.log('Updated Passengers:', updated);
+
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    loadAuthForm();
+  }, []);
+
+  const loadAuthForm = async () => {
+    try {
+      const res = await fetch(`/api/authform/booking/${booking._id}`);
+      const result = await res.json();
+
+      // Existing Auth Form
+      if (result.data) {
+        console.log('API Response:', result.data);
+        setAuthFormId(result.data._id);
+
+        form.setFieldsValue({
+          emailSubject: result.data.email?.subject || '',
+          customerEmail: booking.customer.email,
+          bookingReferenceNo: result.data.bookingReferenceNo,
+          metaReferenceNo: result.data.metaReferenceNo || '',
+          bookingType: result.data.bookingType,
+          serviceType: result.data.serviceType,
+        });
+
+        setContent(result.data.content || '');
+        if (result.data.bookingDetails) {
+          setBookingImage({
+            uid: '-1',
+            name: 'booking-detail',
+            status: 'done',
+            url: result.data.bookingDetails,
+          });
+        }
+        setTerms(result.data.terms || '');
+        setCharges(result.data.charges || []);
+
+        setCards(
+          (result.data.cards || []).map((card: any) => ({
+            ...card,
+            expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
+          }))
+        );
+
+        const loadedPassengers = (result.data.passengers || []).map((p: any) => ({
+          title: p.title,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          gender: p.gender || 'Male',
+          dob: p.dob ? dayjs(p.dob).toISOString() : '',
+        }));
+
+        if (loadedPassengers.length > 0) {
+          console.log('Existing Auth Form - Loaded passengers', loadedPassengers);
+          setPassengers(loadedPassengers);
+        } else {
+          setPassengers([
+            {
+              title: 'Mr.',
+              firstName: customerName[0] ?? '',
+              lastName: customerName.slice(1).join(' '),
+              gender: 'Male',
+              dob: '',
+            },
+          ]);
+        }
+      } else {
+        // New Auth Form
+        setAuthFormId(null);
+
+        form.setFieldsValue({
+          emailSubject: '',
+          customerEmail: booking.customer.email,
+          bookingReferenceNo: booking.bookingNo,
+          metaReferenceNo: '',
+          bookingType: undefined,
+          serviceType: undefined,
+        });
+
+        setContent('');
+        setTerms(termsTemplates.Flight);
+        setCharges([]);
+        setCards([]);
+        console.log('New Auth Form - Creating default passenger');
+        setPassengers([
+          {
+            title: 'Mr.',
+            firstName: customerName[0] ?? '',
+            lastName: customerName.slice(1).join(' '),
+            gender: 'Male',
+            dob: '',
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error(err);
+      message.error('Failed to load authorization form');
+    }
+  };
+
+  console.log('Passengers State:', passengers);
 
   const onFinish = async (values: any) => {
     try {
       setLoading(true);
+
+      const totalCardAmount = cards.reduce((sum, card) => sum + (Number(card.amount) || 0), 0);
+
+      if (totalCardAmount < totalAmount) {
+        message.error(
+          `Card total is less than the total charges. Remaining amount: ${
+            totalAmount - totalCardAmount
+          }`
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (totalCardAmount > totalAmount) {
+        message.error(
+          `Card total cannot exceed the total charges. Exceeded by: ${
+            totalCardAmount - totalAmount
+          }`
+        );
+        setLoading(false);
+        return;
+      }
+
+      let bookingDetails = bookingImage?.url || '';
+      console.log('Passengers State Before Save:', passengers);
+
+      if (bookingImage?.originFileObj) {
+        const formData = new FormData();
+
+        formData.append('file', bookingImage.originFileObj as File);
+        formData.append('folder', 'authform/booking-detail');
+        formData.append('bookingId', booking._id);
+        formData.append('bookingNo', booking.bookingNo);
+
+        const uploadResponse = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload booking image');
+        }
+
+        const uploadResult = await uploadResponse.json();
+
+        bookingDetails = uploadResult.url;
+      }
 
       const payload = {
         bookingId: booking._id,
@@ -93,16 +257,18 @@ export default function AuthForm({ booking }: AuthFormProps) {
         serviceType: values.serviceType,
 
         passengers: passengers
-          .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.dob)
+          .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender && p.dob)
           .map((p) => ({
-            ...p,
-            dob: dayjs(p.dob, 'DD-MM-YYYY').toDate(),
+            title: p.title,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            gender: p.gender,
+            dob: new Date(p.dob!),
           })),
 
         content,
-        bookingDetails,
         terms,
-
+        bookingDetails,
         charges,
         cards: cards.map((card) => ({
           ...card,
@@ -110,8 +276,15 @@ export default function AuthForm({ booking }: AuthFormProps) {
         })),
       };
 
-      const response = await fetch('/api/authform', {
-        method: 'POST',
+      console.log('Passengers State:', passengers);
+      console.log('Payload Passengers:', payload.passengers);
+
+      const url = authFormId ? `/api/authform/${authFormId}` : '/api/authform';
+
+      const method = authFormId ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -126,6 +299,10 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
       message.success(result.message);
 
+      if (!authFormId) {
+        setAuthFormId(result.data._id);
+      }
+
       console.log(result);
     } catch (error: any) {
       message.error(error.message || 'Something went wrong');
@@ -137,7 +314,6 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const handleCancel = () => {
     form.resetFields();
     setContent('');
-    setBookingDetails('');
     setTerms(termsTemplates.Flight);
   };
 
@@ -165,20 +341,21 @@ export default function AuthForm({ booking }: AuthFormProps) {
         </Row>
 
         <Card size="small" title="Email Content" style={{ marginTop: 16, marginBottom: 16 }}>
-          <RichTextEditor label="Content" value={content} onChange={setContent} />
+          <RichTextEditor
+            label="Content"
+            value={content}
+            onChange={setContent}
+            folder="authform/email-content"
+          />
 
           <div style={{ marginTop: 24 }}>
-            <RichTextEditor
-              label="Booking Details"
-              value={bookingDetails}
-              onChange={setBookingDetails}
-            />
+            <BookingDetails booking={booking} value={bookingImage} onChange={setBookingImage} />
           </div>
         </Card>
 
         <Charges value={charges} onChange={setCharges} />
 
-        <CardInformation value={cards} onChange={setCards} />
+        <CardInformation value={cards} onChange={setCards} totalAmount={totalAmount} />
 
         <TermsConditions value={terms} onChange={setTerms} />
 
@@ -188,7 +365,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
               <Button onClick={handleCancel}>Cancel</Button>
 
               <Button type="primary" htmlType="submit" loading={loading}>
-                Save
+                {loading ? 'Saving...' : authFormId ? 'Update' : 'Save'}
               </Button>
             </Space>
           </Row>
