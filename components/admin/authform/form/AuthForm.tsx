@@ -116,7 +116,13 @@ export default function AuthForm({ booking }: AuthFormProps) {
         });
 
         setContent(result.data.content || '');
-        if (result.data.bookingDetails) {
+
+        // Reset both states first
+        setBookingImage(null);
+        setSelectedFlight(null);
+
+        // Image booking
+        if (result.data.bookingDetailsType === 'image' && result.data.bookingDetails) {
           setBookingImage({
             uid: '-1',
             name: 'booking-detail',
@@ -124,6 +130,12 @@ export default function AuthForm({ booking }: AuthFormProps) {
             url: result.data.bookingDetails,
           });
         }
+
+        // API itinerary booking
+        if (result.data.bookingDetailsType === 'api' && result.data.itineraryData) {
+          setSelectedFlight(result.data.itineraryData);
+        }
+
         setTerms(result.data.terms || '');
         setCharges(result.data.charges || []);
 
@@ -218,33 +230,56 @@ export default function AuthForm({ booking }: AuthFormProps) {
         return;
       }
 
-      // let bookingDetails = bookingImage?.url || '';
       const oldBookingImage = bookingImage?.url || '';
-      let bookingDetails = oldBookingImage;
-      console.log('Passengers State Before Save:', passengers);
 
-      if (bookingImage?.originFileObj) {
-        const formData = new FormData();
+      let bookingDetails = '';
+      let bookingDetailsType: 'image' | 'api' = 'image';
+      let itineraryData: any = null;
 
-        formData.append('file', bookingImage.originFileObj as File);
-        formData.append('folder', 'authform/booking-detail');
-        formData.append('bookingId', booking._id);
-        formData.append('bookingNo', booking.bookingNo);
+      // ===========================
+      // IMAGE MODE
+      // ===========================
+      if (bookingImage) {
+        bookingDetailsType = 'image';
+        itineraryData = null;
 
-        const uploadResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        // New image uploaded
+        if (bookingImage.originFileObj) {
+          const formData = new FormData();
 
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload booking image');
+          formData.append('file', bookingImage.originFileObj as File);
+          formData.append('folder', 'authform/booking-detail');
+          formData.append('bookingId', booking._id);
+          formData.append('bookingNo', booking.bookingNo);
+
+          const uploadResponse = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error('Failed to upload booking image');
+          }
+
+          const uploadResult = await uploadResponse.json();
+
+          bookingDetails = uploadResult.url;
+        } else {
+          // Existing image
+          bookingDetails = oldBookingImage;
         }
+      }
 
-        const uploadResult = await uploadResponse.json();
+      // ===========================
+      // ITINERARY MODE
+      // ===========================
+      else if (selectedFlight) {
+        bookingDetailsType = 'api';
+        itineraryData = selectedFlight;
+        bookingDetails = '';
 
-        bookingDetails = uploadResult.url;
-
-        if (oldBookingImage && oldBookingImage !== bookingDetails) {
+        // Delete old uploaded image
+        if (oldBookingImage) {
           await fetch('/api/upload', {
             method: 'DELETE',
             headers: {
@@ -258,8 +293,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
         }
       }
 
-      // console.log('Selected Flight', selectedFlight);
-      // console.log('Payload', payload);
+      
 
       const payload = {
         bookingId: booking._id,
@@ -287,16 +321,22 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         content,
         terms,
+
         bookingDetails,
-        bookingDetailsType: selectedFlight ? 'api' : 'image',
-        itineraryData: selectedFlight,
+        bookingDetailsType,
+        itineraryData,
+
         charges,
+
         cards: cards.map((card) => ({
           ...card,
           expiryDate: card.expiryDate ? card.expiryDate.format('MM/YYYY') : '',
         })),
       };
 
+
+      console.log('Selected Flight', selectedFlight);
+      console.log('Payload', payload);
       console.log('Passengers State:', passengers);
       console.log('Payload Passengers:', payload.passengers);
 

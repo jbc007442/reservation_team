@@ -1,10 +1,33 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-import { Card, Typography, Upload, Tabs, Input, Button, Alert, message, Skeleton, Row, Col } from 'antd';
-import { InboxOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  Card,
+  Typography,
+  Upload,
+  Tabs,
+  Input,
+  Button,
+  DatePicker,
+  message,
+  Skeleton,
+  Select,
+  Row,
+  Col,
+} from 'antd';
+import {
+  InboxOutlined,
+  DeleteOutlined,
+  SwapOutlined,
+  EnvironmentOutlined,
+  CalendarOutlined,
+  SearchOutlined,
+  CarOutlined,
+} from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { Booking } from '@/components/admin/booking/types';
+import FlightCard from './FlightCard';
+import dayjs from 'dayjs';
 
 const { Text } = Typography;
 
@@ -27,14 +50,33 @@ const BookingDetails = ({
   const [arrivalId, setArrivalId] = useState('DXB');
   const [outboundDate, setOutboundDate] = useState('2026-08-15');
   const [returnDate, setReturnDate] = useState('2026-08-22');
-  const [tripType, setTripType] = useState('1');
+  const [tripType, setTripType] = useState('round');
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [infants, setInfants] = useState(0);
   const [travelClass, setTravelClass] = useState('economy');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any[]>([]);
-  const flights = selectedFlight ? [selectedFlight] : result;
+
+  const [departureFlights, setDepartureFlights] = useState<any[]>([]);
+  const [returnFlights, setReturnFlights] = useState<any[]>([]);
+
+  const [selectedDeparture, setSelectedDeparture] = useState<any>(null);
+  const [selectedReturn, setSelectedReturn] = useState<any>(null);
+
+  const [step, setStep] = useState<'departure' | 'return'>('departure');
+
+  useEffect(() => {
+    if (!selectedFlight) return;
+
+    setSelectedDeparture(selectedFlight.departure || null);
+    setSelectedReturn(selectedFlight.return || null);
+
+    if (selectedFlight.return) {
+      setStep('return');
+    }
+  }, [selectedFlight]);
+
+  const flights = step === 'departure' ? departureFlights : returnFlights;
 
   const fetchFlights = async () => {
     try {
@@ -47,11 +89,11 @@ const BookingDetails = ({
             arrival_id: arrivalId,
             outbound_date: outboundDate,
             return_date: returnDate,
-            type: tripType,
+            flight_type: tripType === 'round' ? 'round_trip' : 'one_way',
             adults: adults.toString(),
             children: children.toString(),
             infants_on_lap: infants.toString(),
-            travel_class: travelClass,
+            travel_class: travelClass === 'first' ? 'first_class' : travelClass,
             currency: 'USD',
           })
       );
@@ -62,7 +104,13 @@ const BookingDetails = ({
         throw new Error(data.error || 'Search failed');
       }
 
-      setResult(data.best_flights || []);
+      setDepartureFlights(data.best_flights || []);
+      setReturnFlights([]);
+
+      setSelectedDeparture(null);
+      setSelectedReturn(null);
+
+      setStep('departure');
       message.success('Flights loaded');
     } catch (err: any) {
       message.error(err.message);
@@ -95,6 +143,8 @@ const BookingDetails = ({
                     maxCount={1}
                     showUploadList={false}
                     beforeUpload={(file) => {
+                      onFlightSelect?.(null); // Clear selected itinerary
+
                       onChange({
                         uid: file.uid,
                         name: file.name,
@@ -184,63 +234,170 @@ const BookingDetails = ({
             label: 'Fetch Itinerary',
             children: (
               <>
-                {!selectedFlight && (
+                {!selectedFlight ? (
                   <Card
-                    size="small"
+                    bordered={false}
                     style={{
-                      marginBottom: 20,
-                      borderRadius: 12,
-                      background: '#fafafa',
+                      borderRadius: 20,
+                      background: '#f8fafc',
+                      marginBottom: 24,
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
                     }}
                   >
-                    <Row gutter={[16, 16]}>
-                      <Col xs={24} md={12}>
-                        <Input
-                          addonBefore="From"
-                          placeholder="DEL"
-                          value={departureId}
-                          onChange={(e) => setDepartureId(e.target.value.toUpperCase())}
-                        />
-                      </Col>
-
-                      <Col xs={24} md={12}>
-                        <Input
-                          addonBefore="To"
-                          placeholder="DXB"
-                          value={arrivalId}
-                          onChange={(e) => setArrivalId(e.target.value.toUpperCase())}
-                        />
-                      </Col>
-
-                      <Col xs={24} md={12}>
-                        <Input
-                          type="date"
-                          value={outboundDate}
-                          onChange={(e) => setOutboundDate(e.target.value)}
-                        />
-                      </Col>
-
-                      <Col xs={24} md={12}>
-                        <Input
-                          type="date"
-                          value={returnDate}
-                          onChange={(e) => setReturnDate(e.target.value)}
-                        />
-                      </Col>
-
-                      <Col span={24}>
-                        <Button
-                          type="primary"
+                    {/* Top Options */}
+                    <Row gutter={16} style={{ marginBottom: 20 }}>
+                      <Col xs={24} sm={12} md={5}>
+                        <Select
                           size="large"
-                          block
-                          loading={loading}
-                          onClick={fetchFlights}
-                        >
-                          Search Flights
-                        </Button>
+                          value={tripType}
+                          onChange={setTripType}
+                          style={{ width: '100%' }}
+                          suffixIcon={<SwapOutlined />}
+                          options={[
+                            { value: 'round', label: 'Round Trip' },
+                            { value: 'oneway', label: 'One Way' },
+                          ]}
+                        />
+                      </Col>
+
+                      <Col xs={24} sm={12} md={6}>
+                        <Select
+                          size="large"
+                          value={travelClass}
+                          onChange={setTravelClass}
+                          style={{ width: '100%' }}
+                          suffixIcon={<CarOutlined />}
+                          options={[
+                            { value: 'economy', label: 'Economy' },
+                            { value: 'premium_economy', label: 'Premium Economy' },
+                            { value: 'business', label: 'Business' },
+                            { value: 'first', label: 'First Class' },
+                          ]}
+                        />
                       </Col>
                     </Row>
+
+                    {/* Search Fields */}
+                    <Row gutter={16} align="middle">
+                      <Col xs={24} md={6}>
+                        <Input
+                          size="large"
+                          prefix={<EnvironmentOutlined />}
+                          placeholder="From"
+                          value={departureId}
+                          onChange={(e) => setDepartureId(e.target.value.toUpperCase())}
+                          style={{ height: 54, borderRadius: 14 }}
+                        />
+                      </Col>
+
+                      <Col
+                        xs={24}
+                        md={1}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Button
+                          shape="circle"
+                          icon={<SwapOutlined />}
+                          size="large"
+                          onClick={() => {
+                            const temp = departureId;
+                            setDepartureId(arrivalId);
+                            setArrivalId(temp);
+                          }}
+                        />
+                      </Col>
+
+                      <Col xs={24} md={6}>
+                        <Input
+                          size="large"
+                          prefix={<EnvironmentOutlined />}
+                          placeholder="To"
+                          value={arrivalId}
+                          onChange={(e) => setArrivalId(e.target.value.toUpperCase())}
+                          style={{ height: 54, borderRadius: 14 }}
+                        />
+                      </Col>
+
+                      <Col xs={24} md={5}>
+                        <DatePicker
+                          size="large"
+                          placeholder="Departure"
+                          style={{
+                            width: '100%',
+                            height: 54,
+                            borderRadius: 14,
+                          }}
+                          suffixIcon={<CalendarOutlined />}
+                          value={outboundDate ? dayjs(outboundDate) : null}
+                          onChange={(d) => setOutboundDate(d?.format('YYYY-MM-DD') || '')}
+                        />
+                      </Col>
+
+                      {tripType === 'round' && (
+                        <Col xs={24} md={5}>
+                          <DatePicker
+                            size="large"
+                            placeholder="Return"
+                            style={{
+                              width: '100%',
+                              height: 54,
+                              borderRadius: 14,
+                            }}
+                            suffixIcon={<CalendarOutlined />}
+                            value={returnDate ? dayjs(returnDate) : null}
+                            onChange={(d) => setReturnDate(d?.format('YYYY-MM-DD') || '')}
+                          />
+                        </Col>
+                      )}
+                    </Row>
+
+                    <div
+                      style={{
+                        marginTop: 28,
+                        display: 'flex',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Button
+                        type="primary"
+                        size="large"
+                        shape="round"
+                        icon={<SearchOutlined />}
+                        loading={loading}
+                        onClick={fetchFlights}
+                        style={{
+                          minWidth: 220,
+                          height: 52,
+                          fontWeight: 600,
+                          fontSize: 16,
+                        }}
+                      >
+                        Search Flights
+                      </Button>
+                    </div>
                   </Card>
+                ) : (
+                  <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                    <Button
+                      danger
+                      onClick={() => {
+                        onFlightSelect?.(null);
+
+                        setSelectedDeparture(null);
+                        setSelectedReturn(null);
+
+                        setDepartureFlights([]);
+                        setReturnFlights([]);
+
+                        setStep('departure');
+                      }}
+                    >
+                      Change Itinerary
+                    </Button>
+                  </div>
                 )}
 
                 {loading &&
@@ -250,124 +407,96 @@ const BookingDetails = ({
                     </Card>
                   ))}
 
+                {step === 'return' && selectedDeparture && (
+                  <>
+                    <h2 style={{ marginBottom: 16 }}>Selected Departure Flight</h2>
+
+                    <FlightCard flight={selectedDeparture} selected showButton={false} />
+
+                    <h2 style={{ marginBottom: 16 }}>Select Return Flight</h2>
+                  </>
+                )}
+
                 {!loading &&
-                  flights.map((flight: any, index: number) => {
-                    const segment = flight.flights[0];
+                  (step === 'return' && selectedReturn ? [selectedReturn] : flights).map(
+                    (flight: any, index: number) => {
+                      const isSelected =
+                        selectedReturn?.flights?.[0]?.flight_number ===
+                          flight.flights?.[0]?.flight_number &&
+                        selectedReturn?.flights?.[0]?.departure_airport?.time ===
+                          flight.flights?.[0]?.departure_airport?.time;
 
-                    return (
-                      <Card
-                        key={index}
-                        hoverable
-                        style={{
-                          marginBottom: 16,
-                          borderRadius: 12,
-                        }}
-                      >
-                        <Row align="middle" gutter={16}>
-                          <Col flex="70px">
-                            <img
-                              src={flight.airline_logo}
-                              alt={segment.airline}
-                              style={{
-                                width: 56,
-                                height: 56,
-                                objectFit: 'contain',
-                              }}
-                            />
-                          </Col>
+                      return (
+                        <FlightCard
+                          key={index}
+                          flight={flight}
+                          selected={isSelected}
+                          showButton={!isSelected}
+                          loading={loading}
+                          buttonText={
+                            isSelected
+                              ? 'Selected'
+                              : step === 'departure'
+                                ? 'Select Departure'
+                                : 'Select Return'
+                          }
+                          onClick={async () => {
+                            if (step === 'departure') {
+                              try {
+                                setLoading(true);
 
-                          <Col flex="auto">
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                              }}
-                            >
-                              <div>
-                                <div
-                                  style={{
-                                    fontSize: 18,
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {selectedFlight && (
-                                    <div
-                                      style={{
-                                        color: '#52c41a',
-                                        fontWeight: 600,
-                                        marginBottom: 6,
-                                      }}
-                                    >
-                                      ✓ Selected Flight
-                                    </div>
-                                  )}
-                                  {segment.airline}
-                                </div>
+                                setSelectedDeparture(flight);
 
-                                <div style={{ color: '#888' }}>{segment.flight_number}</div>
+                                const params = new URLSearchParams({
+                                  departure_token: flight.departure_token,
+                                  departure_id: departureId,
+                                  arrival_id: arrivalId,
+                                  outbound_date: outboundDate,
+                                  return_date: returnDate,
+                                  flight_type: tripType === 'round' ? 'round_trip' : 'one_way',
+                                  adults: adults.toString(),
+                                  children: children.toString(),
+                                  infants_on_lap: infants.toString(),
+                                  travel_class:
+                                    travelClass === 'first' ? 'first_class' : travelClass,
+                                  currency: 'USD',
+                                });
 
-                                <div style={{ marginTop: 10 }}>
-                                  <strong>{segment.departure_airport.time}</strong>
+                                const res = await fetch(`/api/flights/return?${params.toString()}`);
 
-                                  {'  '}
-                                  {segment.departure_airport.id}
+                                const data = await res.json();
 
-                                  <span
-                                    style={{
-                                      margin: '0 12px',
-                                      color: '#1677ff',
-                                    }}
-                                  >
-                                    ─────────►
-                                  </span>
+                                if (!res.ok) {
+                                  throw new Error(data.error || 'Unable to load return flights');
+                                }
 
-                                  <strong>{segment.arrival_airport.time}</strong>
+                                setReturnFlights(data.best_flights || []);
+                                setStep('return');
 
-                                  {'  '}
-                                  {segment.arrival_airport.id}
-                                </div>
+                                message.success('Select your return flight');
+                              } catch (err: any) {
+                                message.error(err.message);
+                              } finally {
+                                setLoading(false);
+                              }
+                            } else {
+                              const itinerary = {
+                                tripType,
+                                departure: selectedDeparture,
+                                return: flight,
+                              };
 
-                                <div
-                                  style={{
-                                    color: '#666',
-                                    marginTop: 6,
-                                  }}
-                                >
-                                  Duration: {flight.total_duration} min
-                                </div>
-                              </div>
+                              setSelectedReturn(flight);
 
-                              <div
-                                style={{
-                                  textAlign: 'right',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: 26,
-                                    fontWeight: 700,
-                                    color: '#1677ff',
-                                  }}
-                                >
-                                  ${flight.price}
-                                </div>
+                              onFlightSelect?.(itinerary);
 
-                                {selectedFlight ? (
-                                  <Button danger onClick={() => onFlightSelect?.(null)}>
-                                    Change Flight
-                                  </Button>
-                                ) : (
-                                  <Button type="primary" onClick={() => onFlightSelect?.(flight)}>
-                                    Select Flight
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </Col>
-                        </Row>
-                      </Card>
-                    );
-                  })}
+                              message.success('Round-trip itinerary selected');
+                            }
+                          }}
+                        />
+                      );
+                    }
+                  )}
               </>
             ),
           },

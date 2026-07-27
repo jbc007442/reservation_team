@@ -5,7 +5,10 @@ import { verifyToken } from '@/lib/jwt';
 
 import { connectDB } from '@/lib/mongodb';
 import AuthForm from '@/models/booking/AuthForm';
+import Booking from '@/models/booking/Booking';
 import mongoose from 'mongoose';
+
+import { sendAuthorizationEmail } from '@/lib/email/sendAuthorizationEmail';
 
 /* ---------------- GET : Single Auth Form ---------------- */
 export async function GET(
@@ -121,10 +124,10 @@ export async function PATCH(
         $set: body,
       },
       {
-        returnDocument: 'after',
+        new: true,
         runValidators: true,
       }
-    );
+    ).populate('bookingId');
 
     if (!authForm) {
       return NextResponse.json(
@@ -136,10 +139,31 @@ export async function PATCH(
       );
     }
 
+    const bookingData = authForm.bookingId as any;
+
+    const approvalLink = `${process.env.NEXT_PUBLIC_APP_URL}/approve?token=${authForm.approval.token}`;
+
+    await sendAuthorizationEmail({
+      to: bookingData.customer.email || '',
+      subject: authForm.email?.subject || 'Booking Authorization Required',
+      approvalLink,
+      authForm,
+    });
+
+    authForm.mailHistory.push({
+      to: bookingData.customer.email,
+      subject: authForm.email?.subject || 'Booking Authorization Required',
+      status: 'sent',
+      provider: 'Nodemailer',
+      sentAt: new Date(),
+    });
+
+    await authForm.save();
+
     return NextResponse.json(
       {
         success: true,
-        message: "Authorization Form updated successfully.",
+        message: 'Authorization Form updated and email sent successfully.',
         data: authForm,
       },
       { status: 200 }

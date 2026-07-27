@@ -80,3 +80,65 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await connectDB();
+
+    const { url, bookingId } = await req.json();
+
+    if (!url) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'File URL is required.',
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('Delete request:', url);
+
+    const filePath = path.join(process.cwd(), 'public', url.replace(/^\/+/, ''));
+
+    console.log('Deleting file:', filePath);
+
+    try {
+      await fs.unlink(filePath);
+
+      // Optional: clear bookingDetails in MongoDB
+      if (bookingId) {
+        await AuthForm.updateOne(
+          { bookingId },
+          {
+            $set: {
+              bookingDetails: '',
+            },
+          }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'File deleted successfully.',
+      });
+    } catch (err) {
+      console.log('File already deleted or not found.');
+
+      return NextResponse.json({
+        success: true,
+        message: 'File already deleted.',
+      });
+    }
+  } catch (error) {
+    console.error('Delete Error:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Failed to delete file.',
+      },
+      { status: 500 }
+    );
+  }
+}

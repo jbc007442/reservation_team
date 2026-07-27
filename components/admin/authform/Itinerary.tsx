@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, Descriptions, Empty, Table, Image } from 'antd';
 
 import { Booking } from '@/components/admin/booking/types';
+import FlightCard from './form/FlightCard';
 
 interface Passenger {
   title: string;
@@ -18,18 +19,22 @@ export default function Itinerary({ booking }: { booking: Booking }) {
 
   useEffect(() => {
     const loadItinerary = async () => {
-      const res = await fetch(`/api/authform/booking/${booking._id}`);
-      const result = await res.json();
+      try {
+        const res = await fetch(`/api/authform/booking/${booking._id}`);
+        const result = await res.json();
 
-      if (result.data) {
-        setData(result.data);
+        if (result.data) {
+          setData(result.data);
+        }
+      } catch (err) {
+        console.error(err);
       }
     };
 
     loadItinerary();
   }, [booking._id]);
 
-  const columns = [
+  const passengerColumns = [
     {
       title: 'Passenger',
       render: (_: any, record: Passenger) =>
@@ -46,43 +51,65 @@ export default function Itinerary({ booking }: { booking: Booking }) {
     },
   ];
 
+  if (!data) {
+    return (
+      <Card title="Itinerary">
+        <Empty description="No itinerary found" />
+      </Card>
+    );
+  }
+
   return (
     <Card title="Itinerary">
-      {data ? (
+      <Descriptions bordered column={2} style={{ marginBottom: 20 }}>
+        <Descriptions.Item label="Booking ID">{data.bookingReferenceNo}</Descriptions.Item>
+
+        <Descriptions.Item label="Customer">
+          {booking.customer.title} {booking.customer.name}
+        </Descriptions.Item>
+      </Descriptions>
+
+      <Table
+        rowKey={(_, index) => String(index)}
+        columns={passengerColumns}
+        dataSource={data.passengers || []}
+        pagination={false}
+        style={{ marginBottom: 20 }}
+      />
+
+      {/* IMAGE MODE */}
+      {data.bookingDetailsType === 'image' && data.bookingDetails ? (
+        <Image
+          src={data.bookingDetails}
+          alt="Booking Details"
+          width="100%"
+          style={{
+            borderRadius: 8,
+            border: '1px solid #f0f0f0',
+          }}
+          preview
+        />
+      ) : null}
+
+      {/* API MODE */}
+      {data.bookingDetailsType === 'api' && data.itineraryData ? (
         <>
-          <Descriptions bordered column={2} style={{ marginBottom: 20 }}>
-            <Descriptions.Item label="Booking ID">{data.bookingReferenceNo}</Descriptions.Item>
+          {data.itineraryData.departure && (
+            <Card title="Departure Flight" size="small" style={{ marginBottom: 20 }}>
+              <FlightCard flight={data.itineraryData.departure} selected showButton={false} />
+            </Card>
+          )}
 
-            <Descriptions.Item label="Customer">
-              {booking.customer.title} {booking.customer.name}
-            </Descriptions.Item>
-          </Descriptions>
-
-          <Table
-            rowKey={(_, index) => String(index)}
-            columns={columns}
-            dataSource={data.passengers || []}
-            pagination={false}
-            style={{ marginBottom: 20 }}
-          />
-
-          {data.bookingDetails ? (
-            <Image
-              src={data.bookingDetails}
-              alt="Booking Details"
-              width="100%"
-              style={{
-                borderRadius: 8,
-                border: '1px solid #f0f0f0',
-              }}
-              preview
-            />
-          ) : (
-            <Empty description="No booking details uploaded" />
+          {data.itineraryData.return && (
+            <Card title="Return Flight" size="small">
+              <FlightCard flight={data.itineraryData.return} selected showButton={false} />
+            </Card>
           )}
         </>
-      ) : (
-        <Empty description="No itinerary found" />
+      ) : null}
+
+      {!data.bookingDetails && !data.itineraryData && (
+        <Empty description="No itinerary available" />
       )}
     </Card>
   );
