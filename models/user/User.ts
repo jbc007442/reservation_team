@@ -31,7 +31,6 @@ const UserSchema = new Schema(
       sparse: true,
       lowercase: true,
       trim: true,
-      default: null,
     },
 
     phone: {
@@ -39,7 +38,6 @@ const UserSchema = new Schema(
       unique: true,
       sparse: true,
       trim: true,
-      default: null,
     },
 
     password: {
