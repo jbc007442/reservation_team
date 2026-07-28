@@ -30,7 +30,7 @@ export default function AuthTabs({ booking }: AuthTabsProps) {
       key: 'authorization',
       label: (
         <span>
-          <SafetyCertificateOutlined /> Authorization Form
+          <SafetyCertificateOutlined /> AuthForm
         </span>
       ),
       children: <AuthForm booking={booking} />,

@@ -42,32 +42,34 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const customerName = booking.customer.name.trim().split(' ');
   const [selectedFlight, setSelectedFlight] = useState<any>(null);
 
-  const [passengers, setPassengers] = useState<Passenger[]>([
-    {
-      title: 'Mr.',
-      firstName: customerName[0] ?? '',
-      lastName: customerName.slice(1).join(' '),
-      gender: 'Male',
-      dob: '',
-    },
-  ]);
+ const [passengers, setPassengers] = useState<Passenger[]>([
+   {
+     title: 'Mr.',
+     firstName: customerName[0] ?? '',
+     middleName: customerName.length > 2 ? customerName.slice(1, -1).join(' ') : '',
+     lastName: customerName.length > 1 ? customerName[customerName.length - 1] : '',
+     gender: 'Male',
+     dob: '',
+   },
+ ]);
 
   useEffect(() => {
     console.log('Passengers Changed:', JSON.stringify(passengers, null, 2));
   }, [passengers]);
 
-  const addPassenger = () => {
-    setPassengers((prev) => [
-      ...prev,
-      {
-        title: 'Mr.',
-        firstName: '',
-        lastName: '',
-        gender: 'Male',
-        dob: '',
-      },
-    ]);
-  };
+ const addPassenger = () => {
+   setPassengers((prev) => [
+     ...prev,
+     {
+       title: 'Mr.',
+       firstName: '',
+       middleName: '',
+       lastName: '',
+       gender: 'Male',
+       dob: '',
+     },
+   ]);
+ };
 
   const removePassenger = (index: number) => {
     setPassengers((prev) => prev.filter((_, i) => i !== index));
@@ -149,6 +151,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
         const loadedPassengers = (result.data.passengers || []).map((p: any) => ({
           title: p.title,
           firstName: p.firstName,
+          middleName: p.middleName || '',
           lastName: p.lastName,
           gender: p.gender || 'Male',
           dob: p.dob ? dayjs(p.dob).toISOString() : '',
@@ -162,7 +165,8 @@ export default function AuthForm({ booking }: AuthFormProps) {
             {
               title: 'Mr.',
               firstName: customerName[0] ?? '',
-              lastName: customerName.slice(1).join(' '),
+              middleName: customerName.length > 2 ? customerName.slice(1, -1).join(' ') : '',
+              lastName: customerName.length > 1 ? customerName[customerName.length - 1] : '',
               gender: 'Male',
               dob: '',
             },
@@ -190,7 +194,8 @@ export default function AuthForm({ booking }: AuthFormProps) {
           {
             title: 'Mr.',
             firstName: customerName[0] ?? '',
-            lastName: customerName.slice(1).join(' '),
+            middleName: customerName.length > 2 ? customerName.slice(1, -1).join(' ') : '',
+            lastName: customerName.length > 1 ? customerName[customerName.length - 1] : '',
             gender: 'Male',
             dob: '',
           },
@@ -314,6 +319,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
           .map((p) => ({
             title: p.title,
             firstName: p.firstName,
+            middleName: p.middleName,
             lastName: p.lastName,
             gender: p.gender,
             dob: new Date(p.dob!),

@@ -1,4 +1,5 @@
 'use client';
+import { useEffect } from 'react';
 
 import { Button, Card, Col, DatePicker, Form, Input, InputNumber, Radio, Row, message } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -37,8 +38,33 @@ const defaultCard: CardInfo = {
 export default function CardInformation({ value, onChange, totalAmount }: CardInformationProps) {
   const cards = value.length > 0 ? value : [{ ...defaultCard }];
 
+  useEffect(() => {
+    if (cards.length === 0) return;
+
+    const updatedCards = cards.map((card, index) =>
+      index === 0
+        ? {
+            ...card,
+            amount: totalAmount,
+          }
+        : card
+    );
+
+    // Prevent infinite loop
+    if (cards[0]?.amount !== totalAmount) {
+      onChange(updatedCards);
+    }
+  }, [totalAmount]);
+
+
   const addCard = () => {
-    onChange([...cards, { ...defaultCard }]);
+    onChange([
+      ...cards,
+      {
+        ...defaultCard,
+        amount: 0,
+      },
+    ]);
   };
 
   const removeCard = (index: number) => {
@@ -46,7 +72,7 @@ export default function CardInformation({ value, onChange, totalAmount }: CardIn
   };
 
   const updateCard = <K extends keyof CardInfo>(index: number, field: K, value: CardInfo[K]) => {
-    const updatedCards = cards.map((card, i) =>
+    let updatedCards = cards.map((card, i) =>
       i === index
         ? {
             ...card,
@@ -56,14 +82,24 @@ export default function CardInformation({ value, onChange, totalAmount }: CardIn
     );
 
     if (field === 'amount') {
-      const totalCardAmount = updatedCards.reduce(
-        (sum, card) => sum + (Number(card.amount) || 0),
-        0
-      );
+      const enteredAmount = Number(value) || 0;
 
-      if (totalCardAmount > totalAmount) {
-        message.error(`Total card amount cannot exceed ${totalAmount}`);
+      if (enteredAmount > totalAmount) {
+        message.error(`Amount cannot exceed ${totalAmount}`);
         return;
+      }
+
+      // Only when there are multiple cards
+      if (updatedCards.length > 1) {
+        const otherTotal = updatedCards.reduce((sum, card, i) => {
+          if (i === 0) return sum; // skip first card
+          return sum + (Number(card.amount) || 0);
+        }, 0);
+
+        updatedCards[0] = {
+          ...updatedCards[0],
+          amount: Math.max(totalAmount - otherTotal, 0),
+        };
       }
     }
 

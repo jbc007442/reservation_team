@@ -1,39 +1,35 @@
 'use client';
 
 import { Col, Form, Input, Row } from 'antd';
-import { Booking } from '@/components/user/booking/types';
+import { Booking } from '@/components/admin/booking/types';
 
 interface EmailInfoProps {
   booking: Booking;
 }
 
+const maskEmail = (email?: string) => {
+  if (!email) return '';
+
+  return email.replace(/^(.{2})[^@]*(@.*)$/, '$1******$2');
+};
+
 export default function EmailInfo({ booking }: EmailInfoProps) {
   return (
     <Row gutter={16}>
-      {/* Row 1 */}
       <Col xs={24} md={12}>
-        <Form.Item label="Email Subject" name="emailSubject" initialValue="">
+        <Form.Item label="Email Subject" name="emailSubject">
           <Input placeholder="NEW BOOKING" />
         </Form.Item>
       </Col>
 
       <Col xs={24} md={12}>
-        <Form.Item
-          label="Customer Email"
-          name="customerEmail"
-          initialValue={booking.customer.email}
-        >
-          <Input placeholder="customer@email.com" />
+        <Form.Item label="Customer Email">
+          <Input value={maskEmail(booking.customer.email)} readOnly />
         </Form.Item>
       </Col>
 
-      {/* Row 2 */}
       <Col xs={24} md={12}>
-        <Form.Item
-          label="Booking Reference No"
-          name="bookingReferenceNo"
-          initialValue={booking.bookingNo}
-        >
+        <Form.Item label="Booking Reference No" name="bookingReferenceNo">
           <Input placeholder="PENDING" readOnly />
         </Form.Item>
       </Col>

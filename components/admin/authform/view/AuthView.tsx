@@ -78,11 +78,18 @@ export default function AuthView({ id }: Props) {
               <Descriptions.Item label="Name">{authForm.bookingId.customer.name}</Descriptions.Item>
 
               <Descriptions.Item label="Email">
-                {authForm.bookingId.customer.email}
+                {authForm.bookingId.customer.email
+                  ? authForm.bookingId.customer.email.replace(/^(.{2})[^@]*(@.*)$/, '$1******$2')
+                  : '-'}
               </Descriptions.Item>
 
               <Descriptions.Item label="Mobile">
-                {authForm.bookingId.customer.mobile}
+                {authForm.bookingId.customer.mobile
+                  ? authForm.bookingId.customer.mobile.replace(
+                      /^(\d{2})\d{6}(\d{2})$/,
+                      '$1******$2'
+                    )
+                  : '-'}
               </Descriptions.Item>
             </Descriptions>
           </Card>

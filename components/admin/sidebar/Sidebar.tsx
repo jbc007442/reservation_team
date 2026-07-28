@@ -12,6 +12,7 @@ import {
   DownOutlined,
   RightOutlined,
   ScheduleOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 
 const menus = [
@@ -73,6 +74,11 @@ const menus = [
         href: '/admin/booking/authform',
       },
     ],
+  },
+  {
+    name: 'Reports',
+    href: '/admin/reports',
+    icon: BarChartOutlined,
   },
 ];
 
@@ -161,13 +167,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                             key={child.href}
                             href={child.href}
                             onClick={onClose}
-                            className={`block rounded-lg px-3 py-2 text-sm transition ${
+                            className={`flex items-center gap-4 rounded-xl px-4 py-3 font-medium transition ${
                               childActive
-                                ? 'bg-blue-50 font-semibold text-blue-600'
+                                ? 'bg-gradient-to-r from-blue-600 to-cyan-500 !text-white shadow-lg'
                                 : 'text-slate-600 hover:bg-slate-100'
                             }`}
                           >
-                            {child.name}
+                            <Icon className={`text-lg ${childActive ? '!text-white' : ''}`} />
+                            <span className={childActive ? '!text-white' : ''}>{child.name}</span>
                           </Link>
                         );
                       })}

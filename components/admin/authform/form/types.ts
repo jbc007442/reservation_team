@@ -3,6 +3,7 @@ import { Booking } from '@/components/admin/booking/types';
 export interface Passenger {
   title: string;
   firstName: string;
+  middleName: string;
   lastName: string;
   gender: 'Male' | 'Female' | 'Other';
   dob: string | null;

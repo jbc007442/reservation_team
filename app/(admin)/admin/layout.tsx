@@ -10,7 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-slate-50">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <div className="lg:pl-72 flex flex-col transition-all duration-300">
+      <div className="lg:pl-60 flex flex-col transition-all duration-300">
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="p-4 lg:p-8">
           <div className="max-w-7xl mx-auto">{children}</div>

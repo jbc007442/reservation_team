@@ -49,6 +49,17 @@ export default function PassengerSection({
             </Form.Item>
           </Col>
 
+          {/* Middle Name */}
+          <Col xs={24} md={4}>
+            <Form.Item label={index === 0 ? 'Middle Name' : `Middle Name ${index + 1}`}>
+              <Input
+                placeholder="Middle Name"
+                value={passenger.middleName}
+                onChange={(e) => updatePassenger(index, 'middleName', e.target.value)}
+              />
+            </Form.Item>
+          </Col>
+
           {/* Last Name */}
           <Col xs={24} md={4}>
             <Form.Item label={index === 0 ? 'Last Name' : `Last Name ${index + 1}`}>

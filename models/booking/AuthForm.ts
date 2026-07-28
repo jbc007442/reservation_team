@@ -16,6 +16,12 @@ const PassengerSchema = new Schema(
       trim: true,
     },
 
+    middleName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+
     lastName: {
       type: String,
       required: true,
@@ -443,7 +449,6 @@ const AuthFormSchema = new Schema<IAuthForm>(
   }
 );
 
-AuthFormSchema.index({ bookingId: 1 }, { unique: true });
 AuthFormSchema.index({ 'approval.status': 1 });
 
 export default (mongoose.models.AuthForm as Model<IAuthForm>) ||

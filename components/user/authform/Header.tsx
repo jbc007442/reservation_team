@@ -73,19 +73,25 @@ export default function Header({ booking }: HeaderProps) {
               </Tag>
 
               <Tag color="cyan">{booking.service}</Tag>
-
-              {/* <Tag icon={<EnvironmentOutlined />}>{booking.createdBy?.name || 'N/A'}</Tag> */}
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3">
               <div className="flex items-center gap-2">
                 <PhoneOutlined />
-                <Text>{booking.customer.mobile}</Text>
+                <Text>
+                  {booking.customer.mobile
+                    ? booking.customer.mobile.replace(/^(\d{2})\d{6}(\d{2})$/, '$1******$2')
+                    : '-'}
+                </Text>
               </div>
 
               <div className="flex items-center gap-2">
                 <MailOutlined />
-                <Text>{booking.customer.email || '-'}</Text>
+                <Text>
+                  {booking.customer.email
+                    ? booking.customer.email.replace(/^(.{2})[^@]*(@.*)$/, '$1******$2')
+                    : '-'}
+                </Text>
               </div>
             </div>
           </div>

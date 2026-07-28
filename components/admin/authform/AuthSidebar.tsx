@@ -197,9 +197,23 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
                 value={`${booking.customer.title ? booking.customer.title + ' ' : ''}${booking.customer.name}`}
               />
 
-              <InfoRow label="Phone" value={booking.customer.mobile} />
+              <InfoRow
+                label="Phone"
+                value={
+                  booking.customer.mobile
+                    ? booking.customer.mobile.replace(/^(\d{2})\d{6}(\d{2})$/, '$1******$2')
+                    : '-'
+                }
+              />
 
-              <InfoRow label="Email" value={booking.customer.email || '-'} />
+              <InfoRow
+                label="Email"
+                value={
+                  booking.customer.email
+                    ? booking.customer.email.replace(/^(.{2})[^@]*(@.*)$/, '$1******$2')
+                    : '-'
+                }
+              />
             </tbody>
           </table>
         </div>
