@@ -65,14 +65,32 @@ const BookingDetails = ({
 
   const [step, setStep] = useState<'departure' | 'return'>('departure');
 
+  // useEffect(() => {
+  //   if (!selectedFlight) return;
+
+  //   setSelectedDeparture(selectedFlight.departure || null);
+  //   setSelectedReturn(selectedFlight.return || null);
+
+  //   if (selectedFlight.return) {
+  //     setStep('return');
+  //   }
+  // }, [selectedFlight]);
+
   useEffect(() => {
-    if (!selectedFlight) return;
+    if (!selectedFlight) {
+      setSelectedDeparture(null);
+      setSelectedReturn(null);
+      setStep('departure');
+      return;
+    }
 
     setSelectedDeparture(selectedFlight.departure || null);
     setSelectedReturn(selectedFlight.return || null);
 
     if (selectedFlight.return) {
       setStep('return');
+    } else {
+      setStep('departure');
     }
   }, [selectedFlight]);
 
@@ -129,6 +147,15 @@ const BookingDetails = ({
     >
       <Tabs
         defaultActiveKey="image"
+        onChange={(key) => {
+          if (key === 'api') {
+            onChange(null); // Clear uploaded image
+          }
+
+          if (key === 'image') {
+            onFlightSelect?.(null); // Clear itinerary
+          }
+        }}
         items={[
           {
             key: 'image',
@@ -442,6 +469,25 @@ const BookingDetails = ({
                           }
                           onClick={async () => {
                             if (step === 'departure') {
+                              // One Way: save immediately
+                              if (tripType === 'oneway') {
+                                const itinerary = {
+                                  tripType,
+                                  departure: flight,
+                                  return: null,
+                                };
+
+                                setSelectedDeparture(flight);
+                                setSelectedReturn(null);
+
+                                onChange(null); // Clear uploaded image
+                                onFlightSelect?.(itinerary);
+
+                                message.success('Flight selected');
+                                return;
+                              }
+
+                              // Round Trip: continue to fetch return flights
                               try {
                                 setLoading(true);
 
@@ -453,7 +499,7 @@ const BookingDetails = ({
                                   arrival_id: arrivalId,
                                   outbound_date: outboundDate,
                                   return_date: returnDate,
-                                  flight_type: tripType === 'round' ? 'round_trip' : 'one_way',
+                                  flight_type: 'round_trip',
                                   adults: adults.toString(),
                                   children: children.toString(),
                                   infants_on_lap: infants.toString(),
@@ -488,6 +534,7 @@ const BookingDetails = ({
 
                               setSelectedReturn(flight);
 
+                              onChange(null);
                               onFlightSelect?.(itinerary);
 
                               message.success('Round-trip itinerary selected');

@@ -13,7 +13,6 @@ import BookingDetails from './BookingDetails';
 import Charges, { ChargeItem } from './Charges';
 import CardInformation, { CardInfo } from './CardInformation';
 import TermsConditions from './TermsConditions';
-
 import { Passenger } from './types';
 import { termsTemplates } from './constants';
 import { Booking } from '@/components/user/booking/types';
