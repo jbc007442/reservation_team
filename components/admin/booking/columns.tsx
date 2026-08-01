@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { createElement } from 'react';
 import { EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import { Badge, Tag, Button, Dropdown } from 'antd';
+import dayjs from 'dayjs';
 
 import { Booking } from './types';
 
@@ -34,7 +35,7 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
       createElement(
         Link,
         {
-          href: `/admin/booking/authform/${record._id}`,
+          href: `/dashboard/booking/authform/${record._id}`,
           className: 'text-blue-600 hover:underline font-medium',
         },
         record.bookingNo
@@ -78,6 +79,12 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
     key: 'createdBy',
     render: (_: any, record: Booking) => record.createdBy?.name || '-',
   },
+  {
+    title: 'Created Date',
+    dataIndex: 'createdAt',
+    key: 'createdAt',
+    render: (createdAt: string) => (createdAt ? dayjs(createdAt).format('DD MMM YYYY') : '-'),
+  },
 
   {
     title: 'Status',
@@ -101,7 +108,7 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
             {
               key: 'view',
               icon: <EyeOutlined />,
-              label: <Link href={`/admin/booking/authform/${record._id}`}>View</Link>,
+              label: <Link href={`/dashboard/booking/authform/${record._id}`}>View</Link>,
             },
             {
               key: 'edit',

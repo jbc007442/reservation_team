@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const email = searchParams.get('email');
 
     // here add now filter
-    const bookingNo = searchParams.get('bookingNo')?.trim();
+    const search = searchParams.get('search')?.trim();
 
     if (mobile || email) {
       const lookupFilter =
@@ -94,16 +94,29 @@ export async function GET(request: NextRequest) {
     // const filter = role === 'admin' ? {} : { createdBy: userId };
 
     // here 
-    let filter: any = {};
+    let filter: any;
 
-    if (role === 'admin') {
-      filter = {};
-    } else if (bookingNo) {
-      // Employee searching by Booking No
-      filter = { bookingNo };
+    // Employee/Admin searching by Name or Email
+    if (search) {
+      filter = {
+        $or: [
+          {
+            'customer.name': {
+              $regex: search,
+              $options: 'i',
+            },
+          },
+          {
+            'customer.email': {
+              $regex: search,
+              $options: 'i',
+            },
+          },
+        ],
+      };
     } else {
-      // Default: show only own bookings
-      filter = { createdBy: userId };
+      // Default listing
+      filter = role === 'admin' ? {} : { createdBy: userId };
     }
 
     const bookings = await Booking.find(filter)

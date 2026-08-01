@@ -1,33 +1,33 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
+import { Booking } from '@/components/admin/booking/types';
 import {
+  CalendarOutlined,
+  CarOutlined,
+  DeleteOutlined,
+  EnvironmentOutlined,
+  InboxOutlined,
+  SearchOutlined,
+  SwapOutlined,
+} from '@ant-design/icons';
+import {
+  Button,
   Card,
+  Col,
+  DatePicker,
+  Input,
+  message,
+  Row,
+  Select,
+  Skeleton,
+  Tabs,
   Typography,
   Upload,
-  Tabs,
-  Input,
-  Button,
-  DatePicker,
-  message,
-  Skeleton,
-  Select,
-  Row,
-  Col,
 } from 'antd';
-import {
-  InboxOutlined,
-  DeleteOutlined,
-  SwapOutlined,
-  EnvironmentOutlined,
-  CalendarOutlined,
-  SearchOutlined,
-  CarOutlined,
-} from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
-import { Booking } from '@/components/admin/booking/types';
-import FlightCard from './FlightCard';
 import dayjs from 'dayjs';
+import FlightCard from './flight/FlightCard';
 
 const { Text } = Typography;
 
@@ -60,21 +60,13 @@ const BookingDetails = ({
   const [departureFlights, setDepartureFlights] = useState<any[]>([]);
   const [returnFlights, setReturnFlights] = useState<any[]>([]);
 
+  const [selectedStops, setSelectedStops] = useState<string[]>([]);
+  const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
+
   const [selectedDeparture, setSelectedDeparture] = useState<any>(null);
   const [selectedReturn, setSelectedReturn] = useState<any>(null);
 
   const [step, setStep] = useState<'departure' | 'return'>('departure');
-
-  // useEffect(() => {
-  //   if (!selectedFlight) return;
-
-  //   setSelectedDeparture(selectedFlight.departure || null);
-  //   setSelectedReturn(selectedFlight.return || null);
-
-  //   if (selectedFlight.return) {
-  //     setStep('return');
-  //   }
-  // }, [selectedFlight]);
 
   useEffect(() => {
     if (!selectedFlight) {
@@ -94,7 +86,24 @@ const BookingDetails = ({
     }
   }, [selectedFlight]);
 
-  const flights = step === 'departure' ? departureFlights : returnFlights;
+  
+
+  // const flights = step === 'departure' ? departureFlights : returnFlights;
+  const allFlights = step === 'departure' ? departureFlights : returnFlights;
+
+  const airlines = [...new Set(allFlights.map((f) => f.flights?.[0]?.airline))];
+
+  const flights = allFlights.filter((flight) => {
+    const stops = Math.max(0, (flight.flights?.length || 1) - 1);
+
+    const airline = flight.flights?.[0]?.airline;
+
+    const stopMatch = selectedStops.length === 0 || selectedStops.includes(String(stops));
+
+    const airlineMatch = selectedAirlines.length === 0 || selectedAirlines.includes(airline);
+
+    return stopMatch && airlineMatch;
+  });
 
   const fetchFlights = async () => {
     try {
@@ -425,6 +434,80 @@ const BookingDetails = ({
                       Change Itinerary
                     </Button>
                   </div>
+                )}
+
+                {allFlights.length > 0 && (
+                  <Card
+                    size="small"
+                    style={{
+                      marginBottom: 20,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Row gutter={24}>
+                      {/* Stops */}
+
+                      <Col xs={24} md={8}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: 8,
+                          }}
+                        >
+                          Stops
+                        </div>
+
+                        <Select
+                          mode="multiple"
+                          allowClear
+                          placeholder="All Stops"
+                          style={{ width: '100%' }}
+                          value={selectedStops}
+                          onChange={setSelectedStops}
+                          options={[
+                            {
+                              value: '0',
+                              label: 'Nonstop',
+                            },
+                            {
+                              value: '1',
+                              label: '1 Stop',
+                            },
+                            {
+                              value: '2',
+                              label: '2+ Stops',
+                            },
+                          ]}
+                        />
+                      </Col>
+
+                      {/* Airline */}
+
+                      <Col xs={24} md={16}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: 8,
+                          }}
+                        >
+                          Airlines
+                        </div>
+
+                        <Select
+                          mode="multiple"
+                          allowClear
+                          placeholder="All Airlines"
+                          style={{ width: '100%' }}
+                          value={selectedAirlines}
+                          onChange={setSelectedAirlines}
+                          options={airlines.map((airline) => ({
+                            value: airline,
+                            label: airline,
+                          }))}
+                        />
+                      </Col>
+                    </Row>
+                  </Card>
                 )}
 
                 {loading &&

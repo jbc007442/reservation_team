@@ -80,7 +80,11 @@ export default function Header({ booking }: HeaderProps) {
                 <PhoneOutlined />
                 <Text>
                   {booking.customer.mobile
-                    ? booking.customer.mobile.replace(/^(\d{2})\d{6}(\d{2})$/, '$1******$2')
+                    ? booking.customer.mobile.replace(
+                        /^(\+\d{1,4})(\d+)(\d{2})$/,
+                        (_, country, middle, last2) =>
+                          `${country}${'*'.repeat(middle.length)}${last2}`
+                      )
                     : '-'}
                 </Text>
               </div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { createElement } from 'react';
 import { EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import { Badge, Tag, Button, Dropdown } from 'antd';
+import dayjs from 'dayjs';
 
 import { Booking } from './types';
 
@@ -77,6 +78,12 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
     title: 'Created By',
     key: 'createdBy',
     render: (_: any, record: Booking) => record.createdBy?.name || '-',
+  },
+  {
+    title: 'Created Date',
+    dataIndex: 'createdAt',
+    key: 'createdAt',
+    render: (createdAt: string) => (createdAt ? dayjs(createdAt).format('DD MMM YYYY') : '-'),
   },
 
   {

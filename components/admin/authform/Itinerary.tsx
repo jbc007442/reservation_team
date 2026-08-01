@@ -1,10 +1,10 @@
 'use client';
 
+import { Card, Descriptions, Empty, Image, Table } from 'antd';
 import { useEffect, useState } from 'react';
-import { Card, Descriptions, Empty, Table, Image } from 'antd';
 
 import { Booking } from '@/components/admin/booking/types';
-import FlightCard from './form/FlightCard';
+import FlightCard from './form/flight/FlightCard';
 
 interface Passenger {
   title: string;

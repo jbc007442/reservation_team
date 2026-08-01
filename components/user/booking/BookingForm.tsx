@@ -7,7 +7,9 @@ import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { App } from 'antd';
-
+import airports from '@/lib/airports';
+import PhoneInput from 'react-phone-input-2';
+import 'react-phone-input-2/lib/style.css';
 const { TextArea } = Input;
 
 interface BookingFormProps {
@@ -25,10 +27,11 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
   const isEdit = !!booking;
 
   const checkExistingCustomer = async (mobile: string) => {
-    if (mobile.length !== 10) return;
+    if (!mobile) return;
 
     try {
-      const res = await fetch(`/api/booking?mobile=${mobile}`);
+      const res = await fetch(`/api/booking?mobile=${encodeURIComponent(mobile)}`);
+
       const data = await res.json();
 
       if (data.exists) {
@@ -189,18 +192,41 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
               label="Mobile Number"
               name="mobile"
               rules={[
-                { required: true, message: 'Please enter mobile number' },
-                { pattern: /^[6-9]\d{9}$/, message: 'Enter a valid mobile number' },
+                {
+                  required: true,
+                  message: 'Please enter mobile number',
+                },
               ]}
             >
-              <Input
-                placeholder="9876543210"
-                maxLength={10}
-                allowClear
-                onChange={(e) => {
-                  if (e.target.value.length === 10) {
-                    checkExistingCustomer(e.target.value);
+              <PhoneInput
+                country="us"
+                enableSearch
+                disableCountryCode={false}
+                value={form.getFieldValue('mobile') || ''}
+                onChange={(value) => {
+                  const phone = `+${value}`;
+
+                  form.setFieldsValue({
+                    mobile: phone,
+                  });
+
+                  if (phone.length > 4) {
+                    checkExistingCustomer(phone);
                   }
+                }}
+                containerStyle={{
+                  width: '100%',
+                }}
+                inputStyle={{
+                  width: '100%',
+                  height: '40px',
+                  borderRadius: '6px',
+                  border: '1px solid #d9d9d9',
+                }}
+                buttonStyle={{
+                  border: '1px solid #d9d9d9',
+                  borderRight: 'none',
+                  borderRadius: '6px 0 0 6px',
                 }}
               />
             </Form.Item>
@@ -241,14 +267,46 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
 
           {/* Journey */}
           <Col xs={24} md={12}>
-            <Form.Item label="Leaving From" name="fromCity" rules={[{ required: true }]}>
-              <Input />
+            <Form.Item
+              label="Leaving From"
+              name="fromCity"
+              rules={[{ required: true, message: 'Please select departure airport' }]}
+            >
+              <Select
+                showSearch
+                size="large"
+                placeholder="Select Departure Airport"
+                optionFilterProp="label"
+                filterOption={(input, option) =>
+                  (option?.label as string).toLowerCase().includes(input.toLowerCase())
+                }
+                options={airports.map((airport: any) => ({
+                  value: airport.iata,
+                  label: `${airport.city} (${airport.iata}) - ${airport.name}`,
+                }))}
+              />
             </Form.Item>
           </Col>
 
           <Col xs={24} md={12}>
-            <Form.Item label="Where To" name="toCity" rules={[{ required: true }]}>
-              <Input />
+            <Form.Item
+              label="Where To"
+              name="toCity"
+              rules={[{ required: true, message: 'Please select destination airport' }]}
+            >
+              <Select
+                showSearch
+                size="large"
+                placeholder="Select Destination Airport"
+                optionFilterProp="label"
+                filterOption={(input, option) =>
+                  (option?.label as string).toLowerCase().includes(input.toLowerCase())
+                }
+                options={airports.map((airport: any) => ({
+                  value: airport.iata,
+                  label: `${airport.city} (${airport.iata}) - ${airport.name}`,
+                }))}
+              />
             </Form.Item>
           </Col>
 

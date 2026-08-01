@@ -25,13 +25,11 @@ export default function BookingTable() {
     fetchBookings();
   }, []);
 
-  const fetchBookings = async (bookingNo = '') => {
+  const fetchBookings = async (search = '') => {
     try {
       setLoading(true);
 
-      const url = bookingNo
-        ? `/api/booking?bookingNo=${encodeURIComponent(bookingNo)}`
-        : '/api/booking';
+      const url = search ? `/api/booking?search=${encodeURIComponent(search)}` : '/api/booking';
 
       const res = await fetch(url, {
         credentials: 'include',
@@ -134,10 +132,9 @@ export default function BookingTable() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="Search booking..."
+              placeholder="Search by name or email..."
               style={{ width: 320 }}
               value={search}
-              // onChange={(e) => setSearch(e.target.value)}
               onChange={(e) => {
                 const value = e.target.value;
                 setSearch(value);
