@@ -46,10 +46,10 @@ const BookingDetails = ({
   selectedFlight,
   onFlightSelect,
 }: BookingDetailsProps) => {
-  const [departureId, setDepartureId] = useState('DEL');
-  const [arrivalId, setArrivalId] = useState('DXB');
-  const [outboundDate, setOutboundDate] = useState('2026-08-15');
-  const [returnDate, setReturnDate] = useState('2026-08-22');
+  const [departureId, setDepartureId] = useState('');
+  const [arrivalId, setArrivalId] = useState('');
+  const [outboundDate, setOutboundDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
   const [tripType, setTripType] = useState('round');
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
@@ -86,9 +86,27 @@ const BookingDetails = ({
     }
   }, [selectedFlight]);
 
-  
 
-  // const flights = step === 'departure' ? departureFlights : returnFlights;
+  // useEffect(() => {
+  //   if (!booking?.journey) return;
+
+  //   setDepartureId(booking.journey.fromCity || '');
+  //   setArrivalId(booking.journey.toCity || '');
+
+  //   setOutboundDate(
+  //     booking.journey.departureDate ? dayjs(booking.journey.departureDate).format('YYYY-MM-DD') : ''
+  //   );
+
+  //   setReturnDate(
+  //     booking.journey.returnDate ? dayjs(booking.journey.returnDate).format('YYYY-MM-DD') : ''
+  //   );
+
+  //   setAdults(booking.journey.adults ?? 1);
+  //   setChildren(booking.journey.children ?? 0);
+  //   setInfants(booking.journey.infants ?? 0);
+  // }, [booking]);
+
+
   const allFlights = step === 'departure' ? departureFlights : returnFlights;
 
   const airlines = [...new Set(allFlights.map((f) => f.flights?.[0]?.airline))];

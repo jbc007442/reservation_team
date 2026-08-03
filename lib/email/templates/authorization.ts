@@ -58,9 +58,16 @@ ${c.amount} ${c.currency || ''}
 <tr>
 <td style="padding:12px;border:1px solid #e5e7eb;">${card.cardType || '-'}</td>
 <td style="padding:12px;border:1px solid #e5e7eb;">${card.cardHolderName || '-'}</td>
-<td style="padding:12px;border:1px solid #e5e7eb;">${card.cardNumber || '-'}</td>
+<td style="padding:12px;border:1px solid #e5e7eb;">${
+          card.cardNumber
+            ? card.cardNumber
+                .replace(/\s/g, '')
+                .replace(/\d(?=\d{4})/g, '*')
+                .replace(/(.{4})/g, '$1 ')
+                .trim()
+            : '-'
+        }</td>
 <td style="padding:12px;border:1px solid #e5e7eb;">${card.expiryDate || '-'}</td>
-<td style="padding:12px;border:1px solid #e5e7eb;">${card.cvv || '-'}</td>
 <td style="padding:12px;border:1px solid #e5e7eb;text-align:right;">
 ${card.amount || '-'} ${card.currency || ''}
 </td>
@@ -642,7 +649,7 @@ border-radius:12px;
 overflow:hidden;
 ">
 
-<tr style="background:#2563eb;color:#fff;">
+<tr style="background:#2563eb;color:#fff;text-align:left;">
 
 <th style="padding:14px;">Title</th>
 <th style="padding:14px;">First Name</th>
@@ -714,13 +721,12 @@ border-radius:12px;
 overflow:hidden;
 ">
 
-<tr style="background:#2563eb;color:#fff;">
+<tr style="background:#2563eb;color:#fff;text-align:left;">
 
 <th style="padding:14px;">Card</th>
 <th style="padding:14px;">Holder</th>
 <th style="padding:14px;">Number</th>
 <th style="padding:14px;">Expiry</th>
-<th style="padding:14px;">CVV</th>
 <th style="padding:14px;">Amount</th>
 
 </tr>
