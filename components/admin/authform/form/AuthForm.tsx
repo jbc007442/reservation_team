@@ -35,6 +35,8 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const [terms, setTerms] = useState<string>(termsTemplates.Flight);
   const [charges, setCharges] = useState<ChargeItem[]>([]);
   const [cards, setCards] = useState<CardInfo[]>([]);
+
+  const [paymentLocked, setPaymentLocked] = useState(false);
   const totalAmount = charges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const [loading, setLoading] = useState(false);
   const [authFormId, setAuthFormId] = useState<string | null>(null);
@@ -140,12 +142,26 @@ export default function AuthForm({ booking }: AuthFormProps) {
         setTerms(result.data.terms || '');
         setCharges(result.data.charges || []);
 
-        setCards(
-          (result.data.cards || []).map((card: any) => ({
-            ...card,
-            expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
-          }))
-        );
+        // setCards(
+        //   (result.data.cards || []).map((card: any) => ({
+        //     ...card,
+        //     expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
+        //   }))
+        // );
+
+        const loadedCards = (result.data.cards || []).map((card: any) => ({
+          ...card,
+          expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
+        }));
+
+        setCards(loadedCards);
+
+        // Lock AuthForm if ALL cards have Transaction ID
+        const allTransactionIdsFilled =
+          loadedCards.length > 0 &&
+          loadedCards.every((card: any) => card.transactionId && card.transactionId.trim() !== '');
+
+        setPaymentLocked(allTransactionIdsFilled);
 
         const loadedPassengers = (result.data.passengers || []).map((p: any) => ({
           title: p.title,
@@ -188,6 +204,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
         setTerms(termsTemplates.Flight);
         setCharges([]);
         setCards([]);
+        setPaymentLocked(false);
         console.log('New Auth Form - Creating default passenger');
         setPassengers([
           {
@@ -436,8 +453,14 @@ export default function AuthForm({ booking }: AuthFormProps) {
             <Space>
               <Button onClick={handleCancel}>Cancel</Button>
 
-              <Button type="primary" htmlType="submit" loading={loading}>
-                {loading ? 'Saving...' : authFormId ? 'Update' : 'Save'}
+              <Button type="primary" htmlType="submit" loading={loading} disabled={paymentLocked}>
+                {loading
+                  ? 'Saving...'
+                  : paymentLocked
+                    ? 'Payment Verified'
+                    : authFormId
+                      ? 'Update'
+                      : 'Save'}
               </Button>
             </Space>
           </Row>

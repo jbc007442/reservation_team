@@ -63,7 +63,6 @@ export default function Billing({ booking }: BillingProps) {
     loadPayments();
   }, [booking._id]);
 
-
   const loadPayments = async () => {
     try {
       setLoading(true);
@@ -216,6 +215,7 @@ export default function Billing({ booking }: BillingProps) {
           <Input
             value={record.transactionId}
             placeholder="Enter Transaction ID"
+            readOnly={record.status === 'Approved'}
             onChange={(e) => handleTransactionChange(record.key, e.target.value)}
           />
         ) : (
@@ -236,9 +236,10 @@ export default function Billing({ booking }: BillingProps) {
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
+                disabled={record.status === 'Approved'}
                 onClick={() => saveTransaction(record.key)}
               >
-                Save
+                {record.status === 'Approved' ? 'Verified' : 'Save'}
               </Button>
             ),
           },

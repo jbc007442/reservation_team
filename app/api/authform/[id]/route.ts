@@ -89,13 +89,13 @@ export async function PATCH(
     await connectDB();
 
     const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
+    const token = cookieStore.get('token')?.value;
 
     if (!token) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unauthorized",
+          message: 'Unauthorized',
         },
         { status: 401 }
       );
@@ -110,13 +110,43 @@ export async function PATCH(
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid Authorization Form ID.",
+          message: 'Invalid Authorization Form ID.',
         },
         { status: 400 }
       );
     }
 
     const body = await req.json();
+
+    // Get existing AuthForm
+    const existingAuthForm = await AuthForm.findById(id).populate('bookingId');
+
+    if (!existingAuthForm) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Authorization Form not found.',
+        },
+        { status: 404 }
+      );
+    }
+
+    // Lock if ALL cards have transaction IDs
+    const paymentLocked =
+      existingAuthForm.cards.length > 0 &&
+      existingAuthForm.cards.every(
+        (card: any) => card.transactionId && card.transactionId.trim() !== ''
+      );
+
+    if (paymentLocked) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Authorization Form is locked because all payments have been verified.',
+        },
+        { status: 403 }
+      );
+    }
 
     const authForm = await AuthForm.findByIdAndUpdate(
       id,
@@ -133,7 +163,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           success: false,
-          message: "Authorization Form not found.",
+          message: 'Authorization Form not found.',
         },
         { status: 404 }
       );
