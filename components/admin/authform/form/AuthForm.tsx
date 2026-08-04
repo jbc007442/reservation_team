@@ -43,34 +43,34 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const customerName = booking.customer.name.trim().split(' ');
   const [selectedFlight, setSelectedFlight] = useState<any>(null);
 
- const [passengers, setPassengers] = useState<Passenger[]>([
-   {
-     title: 'Mr.',
-     firstName: customerName[0] ?? '',
-     middleName: customerName.length > 2 ? customerName.slice(1, -1).join(' ') : '',
-     lastName: customerName.length > 1 ? customerName[customerName.length - 1] : '',
-     gender: 'Male',
-     dob: '',
-   },
- ]);
+  const [passengers, setPassengers] = useState<Passenger[]>([
+    {
+      title: 'Mr.',
+      firstName: customerName[0] ?? '',
+      middleName: customerName.length > 2 ? customerName.slice(1, -1).join(' ') : '',
+      lastName: customerName.length > 1 ? customerName[customerName.length - 1] : '',
+      gender: 'Male',
+      dob: '',
+    },
+  ]);
 
   useEffect(() => {
     console.log('Passengers Changed:', JSON.stringify(passengers, null, 2));
   }, [passengers]);
 
- const addPassenger = () => {
-   setPassengers((prev) => [
-     ...prev,
-     {
-       title: 'Mr.',
-       firstName: '',
-       middleName: '',
-       lastName: '',
-       gender: 'Male',
-       dob: '',
-     },
-   ]);
- };
+  const addPassenger = () => {
+    setPassengers((prev) => [
+      ...prev,
+      {
+        title: 'Mr.',
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        gender: 'Male',
+        dob: '',
+      },
+    ]);
+  };
 
   const removePassenger = (index: number) => {
     setPassengers((prev) => prev.filter((_, i) => i !== index));
@@ -141,13 +141,6 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         setTerms(result.data.terms || '');
         setCharges(result.data.charges || []);
-
-        // setCards(
-        //   (result.data.cards || []).map((card: any) => ({
-        //     ...card,
-        //     expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
-        //   }))
-        // );
 
         const loadedCards = (result.data.cards || []).map((card: any) => ({
           ...card,
@@ -226,6 +219,8 @@ export default function AuthForm({ booking }: AuthFormProps) {
   console.log('Passengers State:', passengers);
 
   const onFinish = async (values: any) => {
+    console.log('===== onFinish Called =====');
+    console.log('Passengers State:', passengers);
     try {
       setLoading(true);
 
@@ -314,8 +309,8 @@ export default function AuthForm({ booking }: AuthFormProps) {
         }
       }
 
-      
-
+      console.log('Booking Image:', bookingImage);
+      console.log('Selected Flight:', selectedFlight);
       const payload = {
         bookingId: booking._id,
         bookingNo: booking.bookingNo,
@@ -330,15 +325,26 @@ export default function AuthForm({ booking }: AuthFormProps) {
         bookingType: values.bookingType,
         serviceType: values.serviceType,
 
+        // passengers: passengers
+        //   .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender && p.dob)
+        //   .map((p) => ({
+        //     title: p.title,
+        //     firstName: p.firstName,
+        //     middleName: p.middleName,
+        //     lastName: p.lastName,
+        //     gender: p.gender,
+        //     dob: new Date(p.dob!),
+        //   })),
+
         passengers: passengers
-          .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender && p.dob)
+          .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender)
           .map((p) => ({
             title: p.title,
             firstName: p.firstName,
             middleName: p.middleName,
             lastName: p.lastName,
             gender: p.gender,
-            dob: new Date(p.dob!),
+            dob: p.dob ? new Date(p.dob) : null,
           })),
 
         content,
@@ -355,7 +361,8 @@ export default function AuthForm({ booking }: AuthFormProps) {
           expiryDate: card.expiryDate ? card.expiryDate.format('MM/YYYY') : '',
         })),
       };
-
+      console.log('Payload:', payload);
+      console.log('Payload Passengers:', payload.passengers);
 
       console.log('Selected Flight', selectedFlight);
       console.log('Payload', payload);
