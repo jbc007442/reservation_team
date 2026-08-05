@@ -1,14 +1,27 @@
 'use client';
-import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
+import { useEffect, useState } from 'react';
 
-import { Button, Card, Col, DatePicker, Form, Input, InputNumber, Row, Select, Space } from 'antd';
-import { useAuthStore } from '@/store/authStore';
-import { useRouter } from 'next/navigation';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { App } from 'antd';
 import airports from '@/lib/airports';
+import { useAuthStore } from '@/store/authStore';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Tabs,
+} from 'antd';
+import { useRouter } from 'next/navigation';
 import PhoneInput from 'react-phone-input-2';
+// @ts-ignore: CSS module side-effect import without type declarations
 import 'react-phone-input-2/lib/style.css';
 const { TextArea } = Input;
 
@@ -74,6 +87,7 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
 
       toDate: booking.journey?.returnDate ? dayjs(booking.journey.returnDate) : null,
 
+      tripType: booking.journey?.tripType || 'roundtrip',
       adults: booking.journey?.adults,
       child: booking.journey?.children,
       infant: booking.journey?.infants,
@@ -101,6 +115,7 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
           email: values.email,
         },
         journey: {
+          tripType: values.tripType,
           fromCity: values.fromCity,
           toCity: values.toCity,
           departureDate: values.fromDate?.toDate(),
@@ -175,6 +190,7 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
       size="small"
       onFinish={handleFinish}
       initialValues={{
+        tripType: 'roundtrip',
         type: 'Client',
         title: 'Mr.',
         adults: 1,
@@ -265,6 +281,31 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
+          <Col span={24}>
+            <Form.Item name="tripType" noStyle>
+              <Tabs
+                activeKey={Form.useWatch('tripType', form) || 'roundtrip'}
+                onChange={(key) => {
+                  form.setFieldValue('tripType', key);
+
+                  if (key === 'oneway') {
+                    form.setFieldValue('toDate', null);
+                  }
+                }}
+                items={[
+                  {
+                    key: 'oneway',
+                    label: 'One Way',
+                  },
+                  {
+                    key: 'roundtrip',
+                    label: 'Round Trip',
+                  },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+
           {/* Journey */}
           <Col xs={24} md={12}>
             <Form.Item
@@ -316,11 +357,26 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
-          <Col xs={24} md={12}>
-            <Form.Item label="Return" name="toDate" rules={[{ required: true }]}>
-              <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
-            </Form.Item>
-          </Col>
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.tripType !== curr.tripType}>
+            {({ getFieldValue }) =>
+              getFieldValue('tripType') === 'roundtrip' && (
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Return"
+                    name="toDate"
+                    rules={[
+                      {
+                        required: true,
+                        message: 'Please select return date',
+                      },
+                    ]}
+                  >
+                    <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
+                  </Form.Item>
+                </Col>
+              )
+            }
+          </Form.Item>
 
           {/* Passenger */}
           <Col xs={8}>

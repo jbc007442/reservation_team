@@ -1,7 +1,8 @@
 'use client';
 
-import { Button, Input, Table } from 'antd';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Button, Input, message, Table } from 'antd';
+
 import { Booking } from '@/components/admin/booking/types';
 
 interface Passenger {
@@ -10,6 +11,7 @@ interface Passenger {
   lastName: string;
   gender: string;
   dob: string;
+  eTicketNo?: string;
 }
 
 interface Props {
@@ -20,6 +22,16 @@ interface Props {
 export default function Eticket({ booking, passengers }: Props) {
   const [tickets, setTickets] = useState<Record<number, string>>({});
 
+  useEffect(() => {
+    const initial: Record<number, string> = {};
+
+    passengers.forEach((passenger, index) => {
+      initial[index] = passenger.eTicketNo || '';
+    });
+
+    setTickets(initial);
+  }, [passengers]);
+
   const handleTicketChange = (index: number, value: string) => {
     setTickets((prev) => ({
       ...prev,
@@ -28,29 +40,41 @@ export default function Eticket({ booking, passengers }: Props) {
   };
 
   const sendTicket = async (record: Passenger, index: number) => {
-    const ticketNo = tickets[index];
+    const ticketNo = tickets[index]?.trim();
 
     if (!ticketNo) {
+      message.warning('Please enter the E-Ticket Number.');
       return;
     }
 
-    console.log({
-      bookingId: booking._id,
-      passenger: record,
-      ticketNo,
-    });
+    try {
+      const res = await fetch('/api/authform/eticket', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: booking._id,
+          passengerIndex: index,
+          ticketNo,
+        }),
+      });
 
-    // await fetch('/api/eticket', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     bookingId: booking._id,
-    //     passenger: record,
-    //     ticketNo,
-    //   }),
-    // });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to save E-Ticket.');
+      }
+
+      setTickets((prev) => ({
+        ...prev,
+        [index]: ticketNo,
+      }));
+
+      message.success('E-Ticket updated successfully.');
+    } catch (error: any) {
+      message.error(error.message || 'Failed to update E-Ticket.');
+    }
   };
 
   const columns = [
@@ -81,8 +105,12 @@ export default function Eticket({ booking, passengers }: Props) {
     {
       title: 'Action',
       render: (_: any, record: Passenger, index: number) => (
-        <Button type="primary" onClick={() => sendTicket(record, index)}>
-          Send Ticket
+        <Button
+          type="primary"
+          onClick={() => sendTicket(record, index)}
+          disabled={!tickets[index]?.trim()}
+        >
+          Save
         </Button>
       ),
     },
@@ -90,7 +118,7 @@ export default function Eticket({ booking, passengers }: Props) {
 
   return (
     <Table
-      rowKey={(_, index) => String(index)}
+      rowKey={(record) => `${record.firstName}-${record.lastName}-${record.dob}`}
       columns={columns}
       dataSource={passengers}
       pagination={false}

@@ -1,9 +1,13 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import { Col, Form, Input, Modal, Row, message } from 'antd';
-import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
+
+const ReactQuill = dynamic(() => import('react-quill-new'), {
+  ssr: false,
+});
 
 interface SendEmailModalProps {
   open: boolean;

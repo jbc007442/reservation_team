@@ -11,6 +11,7 @@ export interface IBooking extends Document {
   };
 
   journey: {
+    tripType: 'oneway' | 'roundtrip';
     fromCity: string;
     toCity: string;
     departureDate: Date;
@@ -88,19 +89,34 @@ const BookingSchema = new Schema<IBooking>(
     },
 
     journey: {
+      tripType: {
+        type: String,
+        enum: ['oneway', 'roundtrip'],
+        default: 'roundtrip',
+        required: true,
+      },
+
       fromCity: {
         type: String,
         required: true,
       },
+
       toCity: {
         type: String,
         required: true,
       },
+
       departureDate: {
         type: Date,
         required: true,
       },
-      returnDate: Date,
+
+      returnDate: {
+        type: Date,
+        required: function (this: any) {
+          return this.tripType === 'roundtrip';
+        },
+      },
 
       adults: {
         type: Number,

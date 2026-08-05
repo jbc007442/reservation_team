@@ -39,6 +39,17 @@ const PassengerSchema = new Schema(
       type: Date,
       required: false,
     },
+
+    eTicketNo: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+
+    eTicketSentAt: {
+      type: Date,
+      default: null,
+    },
   },
   { _id: false }
 );

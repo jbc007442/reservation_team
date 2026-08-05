@@ -325,17 +325,6 @@ export default function AuthForm({ booking }: AuthFormProps) {
         bookingType: values.bookingType,
         serviceType: values.serviceType,
 
-        // passengers: passengers
-        //   .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender && p.dob)
-        //   .map((p) => ({
-        //     title: p.title,
-        //     firstName: p.firstName,
-        //     middleName: p.middleName,
-        //     lastName: p.lastName,
-        //     gender: p.gender,
-        //     dob: new Date(p.dob!),
-        //   })),
-
         passengers: passengers
           .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender)
           .map((p) => ({
