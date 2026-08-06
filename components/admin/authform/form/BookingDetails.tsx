@@ -87,26 +87,6 @@ const BookingDetails = ({
   }, [selectedFlight]);
 
 
-  // useEffect(() => {
-  //   if (!booking?.journey) return;
-
-  //   setDepartureId(booking.journey.fromCity || '');
-  //   setArrivalId(booking.journey.toCity || '');
-
-  //   setOutboundDate(
-  //     booking.journey.departureDate ? dayjs(booking.journey.departureDate).format('YYYY-MM-DD') : ''
-  //   );
-
-  //   setReturnDate(
-  //     booking.journey.returnDate ? dayjs(booking.journey.returnDate).format('YYYY-MM-DD') : ''
-  //   );
-
-  //   setAdults(booking.journey.adults ?? 1);
-  //   setChildren(booking.journey.children ?? 0);
-  //   setInfants(booking.journey.infants ?? 0);
-  // }, [booking]);
-
-
   const allFlights = step === 'departure' ? departureFlights : returnFlights;
 
   const airlines = [...new Set(allFlights.map((f) => f.flights?.[0]?.airline))];
