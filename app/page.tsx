@@ -153,7 +153,11 @@ export default function HomePage() {
               <Card
                 hoverable
                 style={{ height: '100%', borderRadius: 12, border: '1px solid #f0f0f0' }}
-                bodyStyle={{ padding: 32 }}
+                styles={{
+                  body: {
+                    padding: 16,
+                  },
+                }}
               >
                 <div style={{ fontSize: 36, marginBottom: 16 }}>✈️</div>
                 <Title level={4}>Flights</Title>
@@ -168,7 +172,11 @@ export default function HomePage() {
               <Card
                 hoverable
                 style={{ height: '100%', borderRadius: 12, border: '1px solid #f0f0f0' }}
-                bodyStyle={{ padding: 32 }}
+                styles={{
+                  body: {
+                    padding: 16,
+                  },
+                }}
               >
                 <div style={{ fontSize: 36, marginBottom: 16 }}>🏨</div>
                 <Title level={4}>Hotels</Title>
@@ -183,7 +191,11 @@ export default function HomePage() {
               <Card
                 hoverable
                 style={{ height: '100%', borderRadius: 12, border: '1px solid #f0f0f0' }}
-                bodyStyle={{ padding: 32 }}
+                styles={{
+                  body: {
+                    padding: 16,
+                  },
+                }}
               >
                 <div style={{ fontSize: 36, marginBottom: 16 }}>🌴</div>
                 <Title level={4}>Holiday Packages</Title>
@@ -225,7 +237,7 @@ export default function HomePage() {
               Contact Us
             </Title>
 
-            <Space direction="vertical" size={12} style={{ color: '#aaa' }}>
+            <Space orientation="vertical" size={12} style={{ color: '#aaa' }}>
               <div>
                 <PhoneOutlined style={{ marginRight: 8, color: '#1677ff' }} /> +91 98765 43210
               </div>
@@ -244,7 +256,7 @@ export default function HomePage() {
               Quick Links
             </Title>
 
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               <a href="#flights" style={{ color: '#aaa' }}>
                 Flights Booking
               </a>

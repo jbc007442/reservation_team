@@ -5,19 +5,12 @@ interface SendEticketEmailProps {
   to: string;
   booking: any;
   authForm: any;
-  passenger: any;
 }
 
-export async function sendEticketEmail({
-  to,
-  booking,
-  authForm,
-  passenger,
-}: SendEticketEmailProps) {
+export async function sendEticketEmail({ to, booking, authForm }: SendEticketEmailProps) {
   const html = eticketTemplate({
     booking,
     authForm,
-    passenger,
   });
 
   await transporter.sendMail({

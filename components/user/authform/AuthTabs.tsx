@@ -16,6 +16,7 @@ import Mails from './Mails';
 import Billing from './Billing';
 import History from './History';
 import Itinerary from './Itinerary';
+import Notes from './Notes';
 
 import { Booking } from '@/components/user/booking/types';
 
@@ -29,7 +30,7 @@ export default function AuthTabs({ booking }: AuthTabsProps) {
       key: 'authorization',
       label: (
         <span>
-          <SafetyCertificateOutlined /> Authorization Form
+          <SafetyCertificateOutlined /> AuthForm
         </span>
       ),
       children: <AuthForm booking={booking} />,
@@ -77,7 +78,7 @@ export default function AuthTabs({ booking }: AuthTabsProps) {
           <HistoryOutlined /> Notes
         </span>
       ),
-      children: <div>Note Section</div>,
+      children: <Notes booking={booking} />,
     },
     {
       key: 'itinerary',

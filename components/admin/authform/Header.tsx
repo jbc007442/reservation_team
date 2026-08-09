@@ -78,24 +78,12 @@ export default function Header({ booking }: HeaderProps) {
             <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3">
               <div className="flex items-center gap-2">
                 <PhoneOutlined />
-                <Text>
-                  {booking.customer.mobile
-                    ? booking.customer.mobile.replace(
-                        /^(\+\d{1,4})(\d+)(\d{2})$/,
-                        (_, country, middle, last2) =>
-                          `${country}${'*'.repeat(middle.length)}${last2}`
-                      )
-                    : '-'}
-                </Text>
+                <Text>{booking.customer.mobile || '-'}</Text>
               </div>
 
               <div className="flex items-center gap-2">
                 <MailOutlined />
-                <Text>
-                  {booking.customer.email
-                    ? booking.customer.email.replace(/^(.{2})[^@]*(@.*)$/, '$1******$2')
-                    : '-'}
-                </Text>
+                <Text>{booking.customer.email || '-'}</Text>
               </div>
             </div>
           </div>

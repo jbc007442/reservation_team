@@ -32,9 +32,7 @@ export async function PATCH(req: NextRequest) {
 
     /* ---------------- Request Body ---------------- */
 
-    const { bookingId, passengerIndex, ticketNo } = await req.json();
-
-    const eTicketNo = String(ticketNo || '').trim();
+    const { bookingId, tickets } = await req.json();
 
     if (!bookingId) {
       return NextResponse.json(
@@ -46,21 +44,11 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    if (passengerIndex === undefined || passengerIndex === null) {
+    if (!Array.isArray(tickets) || tickets.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          message: 'Passenger Index is required.',
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!eTicketNo) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'E-Ticket Number is required.',
+          message: 'No E-Ticket data provided.',
         },
         { status: 400 }
       );
@@ -93,49 +81,60 @@ export async function PATCH(req: NextRequest) {
         { status: 404 }
       );
     }
-    /* ---------------- Passenger Validation ---------------- */
 
-    if (passengerIndex < 0 || passengerIndex >= authForm.passengers.length) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Passenger not found.',
-        },
-        { status: 404 }
-      );
+    /* ---------------- Update All Passengers ---------------- */
+
+    const usedTicketNumbers = new Set<string>();
+
+    for (const item of tickets) {
+      const passengerIndex = Number(item.passengerIndex);
+      const eTicketNo = String(item.ticketNo || '').trim();
+
+      if (passengerIndex < 0 || passengerIndex >= authForm.passengers.length) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Passenger ${passengerIndex + 1} not found.`,
+          },
+          { status: 404 }
+        );
+      }
+
+      if (!eTicketNo) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `E-Ticket Number is required for passenger ${passengerIndex + 1}.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (usedTicketNumbers.has(eTicketNo)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Duplicate E-Ticket Number: ${eTicketNo}`,
+          },
+          { status: 409 }
+        );
+      }
+
+      usedTicketNumbers.add(eTicketNo);
+
+      const passenger: any = authForm.passengers[passengerIndex];
+
+      passenger.eTicketNo = eTicketNo;
+      passenger.eTicketSentAt = new Date();
     }
-
-    /* ---------------- Duplicate E-Ticket Check ---------------- */
-
-    const duplicate = authForm.passengers.some(
-      (p: any, index: number) =>
-        index !== passengerIndex && p.eTicketNo && p.eTicketNo.trim() === eTicketNo
-    );
-
-    if (duplicate) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'This E-Ticket Number already exists for another passenger.',
-        },
-        { status: 409 }
-      );
-    }
-
-    /* ---------------- Update Passenger ---------------- */
-
-    const passenger = authForm.passengers[passengerIndex] as any;
-
-    passenger.eTicketNo = eTicketNo;
-    passenger.eTicketSentAt = new Date();
 
     authForm.markModified('passengers');
 
     /* ---------------- Timeline ---------------- */
 
     authForm.timeline.push({
-      action: 'E-Ticket Generated',
-      description: `${passenger.title} ${passenger.firstName} ${passenger.lastName} - ${eTicketNo}`,
+      action: 'E-Tickets Generated',
+      description: `${tickets.length} passenger(s) ticketed successfully.`,
       performedBy: user?.id || null,
       source: 'staff',
       createdAt: new Date(),
@@ -145,21 +144,19 @@ export async function PATCH(req: NextRequest) {
 
     booking.status = 'ticketed';
 
-    /* ---------------- Save Changes First ---------------- */
+    /* ---------------- Save ---------------- */
 
     await authForm.save();
     await booking.save();
-    /* ---------------- Send E-Ticket Email ---------------- */
+
+    /* ---------------- Send Email ---------------- */
 
     if (booking.customer?.email) {
       const emailHtml = await sendEticketEmail({
         to: booking.customer.email,
         booking,
         authForm,
-        passenger,
       });
-
-      /* ---------------- Mail History ---------------- */
 
       await AuthForm.findByIdAndUpdate(authForm._id, {
         $push: {
@@ -180,18 +177,18 @@ export async function PATCH(req: NextRequest) {
         },
       });
     }
+
     /* ---------------- Response ---------------- */
 
     return NextResponse.json(
       {
         success: true,
         message: booking.customer?.email
-          ? 'E-Ticket saved and emailed successfully.'
-          : 'E-Ticket saved successfully. Customer email not available.',
+          ? 'E-Tickets saved and emailed successfully.'
+          : 'E-Tickets saved successfully. Customer email not available.',
         data: {
           bookingId,
-          passengerIndex,
-          passenger,
+          passengers: authForm.passengers,
         },
       },
       { status: 200 }

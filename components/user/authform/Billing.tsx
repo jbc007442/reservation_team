@@ -1,45 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  Button,
-  Card,
-  Divider,
-  Input,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  Descriptions,
-  message,
-} from 'antd';
+import { Card, Divider, Table, Tag, Typography, Descriptions, message, Space, Button } from 'antd';
 import {
   CheckCircleOutlined,
+  CreditCardOutlined,
   FilePdfOutlined,
   MailOutlined,
-  SaveOutlined,
 } from '@ant-design/icons';
 
-import { useAuthStore } from '@/store/authStore';
 import { Booking } from '@/components/user/booking/types';
 
 const { Text } = Typography;
 
-type UserRole = 'admin' | 'employee';
-
 interface PaymentItem {
   key: string;
-  cardEnding: string;
-  cardHolder: string;
+  description: string;
   amount: number;
+  currency: string;
   transactionId: string;
   status: 'Pending' | 'Approved';
 }
 
-interface ChargeItem {
-  description: string;
-  amount: number;
-  currency: string;
+interface CardItem {
+  key: string;
+  cardType: string;
+  cardHolderName: string;
+  cardNumber: string;
+  expiryDate: string;
+  cvv: string;
+  contactNumber: string;
+  billingAddress: string;
 }
 
 interface BillingProps {
@@ -47,11 +38,8 @@ interface BillingProps {
 }
 
 export default function Billing({ booking }: BillingProps) {
-  const { user } = useAuthStore();
-  const role = (user?.role as UserRole) || 'employee';
-
   const [payments, setPayments] = useState<PaymentItem[]>([]);
-  const [charges, setCharges] = useState<ChargeItem[]>([]);
+  const [cards, setCards] = useState<CardItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [bookingInfo, setBookingInfo] = useState({
@@ -60,64 +48,86 @@ export default function Billing({ booking }: BillingProps) {
   });
 
   useEffect(() => {
-    loadPayments();
+    loadBilling();
   }, [booking._id]);
 
-
-  const loadPayments = async () => {
+  const loadBilling = async () => {
     try {
       setLoading(true);
 
       const res = await fetch(`/api/authform/billing/${booking._id}`);
+
       const result = await res.json();
 
-      // No AuthForm/Billing created yet
       if (!result.data) {
         setBookingInfo({
           bookingReferenceNo: booking.bookingNo,
           customer: '',
         });
 
-        setCharges([]);
         setPayments([]);
+        setCards([]);
         return;
       }
 
-      // Existing Billing
+      // -----------------------------
+      // Booking Information
+      // -----------------------------
+
       setBookingInfo({
-        bookingReferenceNo: result.data.bookingReferenceNo || '',
+        bookingReferenceNo: result.data.bookingReferenceNo || booking.bookingNo,
+
         customer: result.data.customer
-          ? `${result.data.customer.title} ${result.data.customer.firstName} ${result.data.customer.lastName}`
+          ? `${result.data.customer.title || ''} ${result.data.customer.firstName || ''} ${
+              result.data.customer.lastName || ''
+            }`.trim()
           : '',
       });
 
-      setCharges(
-        (result.data.charges || []).map((charge: any) => ({
-          description: charge.description,
-          amount: Number(charge.amount || 0),
-          currency: charge.currency || 'USD',
-        }))
-      );
+      // -----------------------------
+      // Charges
+      // -----------------------------
 
-      const rows: PaymentItem[] = (result.data.cards || []).map((card: any, index: number) => ({
+      const rows: PaymentItem[] = (result.data.charges || []).map((charge: any, index: number) => ({
         key: String(index),
-        cardEnding: card.cardNumber ? `****${card.cardNumber.slice(-4)}` : '-',
-        cardHolder: card.cardHolderName || '-',
-        amount: Number(card.amount || 0),
-        transactionId: card.transactionId || '',
-        status: card.paymentStatus || 'Pending',
+        description: charge.description || '-',
+        amount: Number(charge.amount || 0),
+        currency: charge.currency || 'USD',
+        transactionId: charge.transactionId || '',
+        status: charge.paymentStatus || 'Pending',
       }));
 
       setPayments(rows);
+
+      // -----------------------------
+      // Card Information
+      // -----------------------------
+
+      const cardRows: CardItem[] = (result.data.cards || []).map((card: any, index: number) => ({
+        key: String(index),
+        cardType: card.cardType || '-',
+        cardHolderName: card.cardHolderName || '-',
+        cardNumber: card.cardNumber || '',
+        expiryDate: card.expiryDate || '-',
+        cvv: card.cvv || '',
+        contactNumber: card.contactNumber || '-',
+        billingAddress: card.billingAddress || '-',
+      }));
+
+      setCards(cardRows);
     } catch (err) {
       console.error(err);
-      message.error('Failed to load payment details.');
+      message.error('Failed to load billing details.');
     } finally {
       setLoading(false);
     }
   };
 
-  const total = charges.reduce((sum, item) => sum + item.amount, 0);
+  // -----------------------------
+  // Payment Calculations
+  // -----------------------------
+
+  const total = payments.reduce((sum, item) => sum + item.amount, 0);
 
   const approved = payments
     .filter((item) => item.status === 'Approved')
@@ -126,130 +136,77 @@ export default function Billing({ booking }: BillingProps) {
   const balance = total - approved;
 
   const paymentApproved =
-    payments.length > 0 &&
-    charges.length > 0 &&
-    balance === 0 &&
-    payments.every((item) => item.status === 'Approved');
+    payments.length > 0 && balance === 0 && payments.every((item) => item.status === 'Approved');
 
-  const handleTransactionChange = (key: string, value: string) => {
-    setPayments((prev) =>
-      prev.map((item) =>
-        item.key === key
-          ? {
-              ...item,
-              transactionId: value,
-            }
-          : item
-      )
-    );
-  };
+  // -----------------------------
+  // Payment Columns - READ ONLY
+  // -----------------------------
 
-  const saveTransaction = async (key: string) => {
-    try {
-      const updatedPayments = payments.map((item) =>
-        item.key === key
-          ? {
-              ...item,
-              status: (item.transactionId ? 'Approved' : 'Pending') as 'Pending' | 'Approved',
-            }
-          : item
-      );
-
-      setPayments(updatedPayments);
-
-      const res = await fetch(`/api/authform/billing/${booking._id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          cards: updatedPayments,
-          userId: user?._id,
-        }),
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        message.success(result.message);
-      } else {
-        message.error(result.message);
-      }
-    } catch (err) {
-      console.error(err);
-      message.error('Failed to update payment.');
-    }
-  };
-
-  const chargeColumns = [
+  const paymentColumns = [
     {
-      title: 'Description',
+      title: 'Charge',
       dataIndex: 'description',
     },
-    {
-      title: 'Amount',
-      render: (_: any, record: ChargeItem) => `$${record.amount.toLocaleString()}`,
-    },
-    {
-      title: 'Currency',
-      dataIndex: 'currency',
-    },
-  ];
 
-  const columns = [
-    {
-      title: 'Card',
-      dataIndex: 'cardEnding',
-    },
-    {
-      title: 'Card Holder',
-      dataIndex: 'cardHolder',
-    },
     {
       title: 'Amount',
       render: (_: any, record: PaymentItem) => `$${record.amount.toLocaleString()}`,
     },
+
+    {
+      title: 'Currency',
+      dataIndex: 'currency',
+    },
+
     {
       title: 'Transaction ID',
-      render: (_: any, record: PaymentItem) =>
-        role === 'admin' ? (
-          <Input
-            value={record.transactionId}
-            placeholder="Enter Transaction ID"
-            onChange={(e) => handleTransactionChange(record.key, e.target.value)}
-          />
-        ) : (
-          <Text>{record.transactionId || '-'}</Text>
-        ),
+      render: (_: any, record: PaymentItem) => record.transactionId || '-',
     },
+
     {
       title: 'Status',
       render: (_: any, record: PaymentItem) => (
         <Tag color={record.status === 'Approved' ? 'green' : 'orange'}>{record.status}</Tag>
       ),
     },
-    ...(role === 'admin'
-      ? [
-          {
-            title: 'Action',
-            render: (_: any, record: PaymentItem) => (
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={() => saveTransaction(record.key)}
-              >
-                Save
-              </Button>
-            ),
-          },
-        ]
-      : []),
+  ];
+
+  // -----------------------------
+  // Card Columns - READ ONLY
+  // -----------------------------
+
+  const cardColumns = [
+    {
+      title: 'Card Type',
+      dataIndex: 'cardType',
+    },
+
+    {
+      title: 'Card Holder',
+      dataIndex: 'cardHolderName',
+    },
+
+    {
+      title: 'Card Number',
+      render: (_: any, record: CardItem) =>
+        record.cardNumber ? `•••• •••• •••• ${record.cardNumber.slice(-4)}` : '-',
+    },
+
+    {
+      title: 'Expiry',
+      dataIndex: 'expiryDate',
+    },
+
+    {
+      title: 'CVV',
+      render: () => '•••',
+    },
   ];
 
   return (
     <Card
       loading={loading}
-      title="Payment Verification"
+      title="Payment & Billing"
       extra={
         <Space>
           <Button icon={<FilePdfOutlined />}>Download PDF</Button>
@@ -260,6 +217,8 @@ export default function Billing({ booking }: BillingProps) {
         </Space>
       }
     >
+      {/* Booking Information */}
+
       <Descriptions bordered column={2}>
         <Descriptions.Item label="Booking ID">
           {bookingInfo.bookingReferenceNo || booking.bookingNo}
@@ -273,23 +232,33 @@ export default function Billing({ booking }: BillingProps) {
           </Tag>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Cards">{payments.length}</Descriptions.Item>
+        <Descriptions.Item label="Charges">{payments.length}</Descriptions.Item>
       </Descriptions>
 
-      <Divider>Charges</Divider>
+      {/* Payment Details */}
 
-      <Table rowKey="description" pagination={false} columns={chargeColumns} dataSource={charges} />
+      <Divider>Payment Details</Divider>
 
-      <Divider>Payment Cards</Divider>
+      <Table rowKey="key" pagination={false} columns={paymentColumns} dataSource={payments} />
 
-      <Table rowKey="key" pagination={false} columns={columns} dataSource={payments} />
+      {/* Card Information */}
 
-      <Divider />
+      <Divider>
+        <Space>
+          <CreditCardOutlined />
+          Card Information
+        </Space>
+      </Divider>
+
+      <Table rowKey="key" pagination={false} columns={cardColumns} dataSource={cards} />
+
+      {/* Payment Summary */}
 
       <div
         style={{
           maxWidth: 350,
           marginLeft: 'auto',
+          marginTop: 25,
         }}
       >
         <Descriptions bordered column={1} size="small">

@@ -1,100 +1,168 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Drawer, Empty, Form, Input, Select, Space, Typography, Upload } from 'antd';
+import { Button, Drawer, Form, Input, Select, Switch, Upload, Space, Tooltip } from 'antd';
 import { InboxOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
+import { useAuthStore } from '@/store/authStore';
 
-const { Title } = Typography;
 const { TextArea } = Input;
 const { Dragger } = Upload;
 
-export default function NotePost() {
+interface NotePostProps {
+  bookingId: string;
+}
+
+export default function NotePost({ bookingId }: NotePostProps) {
+  const { user } = useAuthStore();
+  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
-  const handleSave = () => {
-    console.log(form.getFieldsValue());
-    setOpen(false);
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields();
+
+      setLoading(true);
+
+      const response = await fetch('/api/authform/note', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId,
+          addedBy: user?._id,
+          ...values,
+          attachments: [],
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message);
+      }
+
+      console.log(result);
+
+      form.resetFields();
+      setOpen(false);
+    } catch (error: any) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <>
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <Title level={5} style={{ margin: 0 }}>
-            Internal Notes
-          </Title>
-
-          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            Add Note
-          </Button>
-        </div>
-
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No internal notes yet." />
-      </div>
+      <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+        Add Note
+      </Button>
 
       <Drawer
         title="Add Internal Note"
-        width={900}
+        size={800}
         open={open}
-        destroyOnClose
+        destroyOnHidden
         onClose={() => setOpen(false)}
         extra={
           <Space>
             <Button onClick={() => setOpen(false)}>Cancel</Button>
 
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
+            <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSave}>
               Save Note
             </Button>
           </Space>
         }
       >
-        <Form layout="vertical" form={form}>
+        <Form
+          layout="vertical"
+          form={form}
+          initialValues={{
+            type: 'note',
+            visibility: 'internal',
+            isPinned: false,
+          }}
+        >
           <Form.Item label="Title" name="title">
-            <Input placeholder="Enter note title" />
+            <Input placeholder="Optional title" />
           </Form.Item>
 
           <div className="grid grid-cols-2 gap-4">
-            <Form.Item label="Category" name="category" initialValue="General">
+            <Form.Item label="Type" name="type">
               <Select
                 options={[
-                  { label: 'General', value: 'General' },
-                  { label: 'Customer', value: 'Customer' },
-                  { label: 'Payment', value: 'Payment' },
-                  { label: 'Flight', value: 'Flight' },
-                  { label: 'Visa', value: 'Visa' },
-                  { label: 'Follow Up', value: 'Follow Up' },
+                  {
+                    label: 'Note',
+                    value: 'note',
+                  },
+                  {
+                    label: 'Follow Up',
+                    value: 'follow_up',
+                  },
+                  {
+                    label: 'Warning',
+                    value: 'warning',
+                  },
+                  {
+                    label: 'System',
+                    value: 'system',
+                  },
                 ]}
               />
             </Form.Item>
 
-            <Form.Item label="Priority" name="priority" initialValue="Normal">
+            <Form.Item label="Visibility" name="visibility">
               <Select
                 options={[
-                  { label: 'Low', value: 'Low' },
-                  { label: 'Normal', value: 'Normal' },
-                  { label: 'High', value: 'High' },
-                  { label: 'Urgent', value: 'Urgent' },
+                  {
+                    label: 'Internal',
+                    value: 'internal',
+                  },
+                  {
+                    label: 'Customer',
+                    value: 'customer',
+                  },
                 ]}
               />
             </Form.Item>
           </div>
 
-          <Form.Item label="Note" name="note">
-            <TextArea rows={10} placeholder="Write an internal note..." />
+          <Form.Item
+            label="Note"
+            name="note"
+            rules={[
+              {
+                required: true,
+                message: 'Please enter a note.',
+              },
+            ]}
+          >
+            <TextArea rows={8} placeholder="Write your note..." />
           </Form.Item>
 
-          <Form.Item label="Attachments">
-            <Dragger multiple beforeUpload={() => false}>
+          <Form.Item label="Attachment">
+            <Dragger beforeUpload={() => false} maxCount={1}>
               <p className="ant-upload-drag-icon">
                 <InboxOutlined />
               </p>
 
-              <p>Click or drag files here to attach</p>
+              <p>Click or drag a file here</p>
 
-              <p className="text-gray-500">PDF, Images, DOCX, XLSX, ZIP...</p>
+              <p className="text-gray-500">Images, PDF, DOCX, XLSX...</p>
             </Dragger>
           </Form.Item>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Form.Item label="Pin this Note" name="isPinned" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+
+            <Form.Item label="Mark as Resolved" name="isResolved" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </div>
         </Form>
       </Drawer>
     </>

@@ -21,7 +21,7 @@ export default function BookingDialog({ open, onClose, onSuccess, booking }: Boo
       width={500}
       destroyOnHidden
       centered
-      maskClosable={false}
+      mask={{ closable: false }}
       title={booking ? 'Edit Booking' : 'New Booking'}
     >
       <BookingForm booking={booking} onCancel={onClose} onSuccess={onSuccess} />

@@ -13,7 +13,6 @@ import BookingDetails from './BookingDetails';
 import Charges, { ChargeItem } from './Charges';
 import CardInformation, { CardInfo } from './CardInformation';
 import TermsConditions from './TermsConditions';
-
 import { Passenger } from './types';
 import { termsTemplates } from './constants';
 import { Booking } from '@/components/user/booking/types';
@@ -36,10 +35,15 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const [terms, setTerms] = useState<string>(termsTemplates.Flight);
   const [charges, setCharges] = useState<ChargeItem[]>([]);
   const [cards, setCards] = useState<CardInfo[]>([]);
-  const totalAmount = charges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const [taxesAndFee, setTaxesAndFee] = useState<number | null>(null);
+
+  const [paymentLocked, setPaymentLocked] = useState(false);
+  const chargesTotal = charges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const totalAmount = chargesTotal + (Number(taxesAndFee) || 0);
   const [loading, setLoading] = useState(false);
   const [authFormId, setAuthFormId] = useState<string | null>(null);
   const customerName = booking.customer.name.trim().split(' ');
+  const [selectedFlight, setSelectedFlight] = useState<any>(null);
 
   const [passengers, setPassengers] = useState<Passenger[]>([
     {
@@ -117,7 +121,13 @@ export default function AuthForm({ booking }: AuthFormProps) {
         });
 
         setContent(result.data.content || '');
-        if (result.data.bookingDetails) {
+
+        // Reset both states first
+        setBookingImage(null);
+        setSelectedFlight(null);
+
+        // Image booking
+        if (result.data.bookingDetailsType === 'image' && result.data.bookingDetails) {
           setBookingImage({
             uid: '-1',
             name: 'booking-detail',
@@ -125,15 +135,31 @@ export default function AuthForm({ booking }: AuthFormProps) {
             url: result.data.bookingDetails,
           });
         }
+
+        // API itinerary booking
+        if (result.data.bookingDetailsType === 'api' && result.data.itineraryData) {
+          setSelectedFlight(result.data.itineraryData);
+        }
+
         setTerms(result.data.terms || '');
         setCharges(result.data.charges || []);
+        setTaxesAndFee(result.data.taxesAndFee ?? null);
 
-        setCards(
-          (result.data.cards || []).map((card: any) => ({
-            ...card,
-            expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
-          }))
-        );
+        const loadedCards = (result.data.cards || []).map((card: any) => ({
+          ...card,
+          expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
+        }));
+
+        setCards(loadedCards);
+
+        // Lock AuthForm only when ALL charges are Approved
+        const loadedCharges = result.data.charges || [];
+
+        const allPaymentsApproved =
+          loadedCharges.length > 0 &&
+          loadedCharges.every((charge: any) => charge.paymentStatus === 'Approved');
+
+        setPaymentLocked(allPaymentsApproved);
 
         const loadedPassengers = (result.data.passengers || []).map((p: any) => ({
           title: p.title,
@@ -175,7 +201,9 @@ export default function AuthForm({ booking }: AuthFormProps) {
         setContent('');
         setTerms(termsTemplates.Flight);
         setCharges([]);
+        setTaxesAndFee(null);
         setCards([]);
+        setPaymentLocked(false);
         console.log('New Auth Form - Creating default passenger');
         setPassengers([
           {
@@ -197,6 +225,8 @@ export default function AuthForm({ booking }: AuthFormProps) {
   console.log('Passengers State:', passengers);
 
   const onFinish = async (values: any) => {
+    console.log('===== onFinish Called =====');
+    console.log('Passengers State:', passengers);
     try {
       setLoading(true);
 
@@ -222,31 +252,71 @@ export default function AuthForm({ booking }: AuthFormProps) {
         return;
       }
 
-      let bookingDetails = bookingImage?.url || '';
-      console.log('Passengers State Before Save:', passengers);
+      const oldBookingImage = bookingImage?.url || '';
 
-      if (bookingImage?.originFileObj) {
-        const formData = new FormData();
+      let bookingDetails = '';
+      let bookingDetailsType: 'image' | 'api' = 'image';
+      let itineraryData: any = null;
 
-        formData.append('file', bookingImage.originFileObj as File);
-        formData.append('folder', 'authform/booking-detail');
-        formData.append('bookingId', booking._id);
-        formData.append('bookingNo', booking.bookingNo);
+      // ===========================
+      // IMAGE MODE
+      // ===========================
+      if (bookingImage) {
+        bookingDetailsType = 'image';
+        itineraryData = null;
 
-        const uploadResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        // New image uploaded
+        if (bookingImage.originFileObj) {
+          const formData = new FormData();
 
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload booking image');
+          formData.append('file', bookingImage.originFileObj as File);
+          formData.append('folder', 'authform/booking-detail');
+          formData.append('bookingId', booking._id);
+          formData.append('bookingNo', booking.bookingNo);
+
+          const uploadResponse = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error('Failed to upload booking image');
+          }
+
+          const uploadResult = await uploadResponse.json();
+
+          bookingDetails = uploadResult.url;
+        } else {
+          // Existing image
+          bookingDetails = oldBookingImage;
         }
-
-        const uploadResult = await uploadResponse.json();
-
-        bookingDetails = uploadResult.url;
       }
 
+      // ===========================
+      // ITINERARY MODE
+      // ===========================
+      else if (selectedFlight) {
+        bookingDetailsType = 'api';
+        itineraryData = selectedFlight;
+        bookingDetails = '';
+
+        // Delete old uploaded image
+        if (oldBookingImage) {
+          await fetch('/api/upload', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              url: oldBookingImage,
+              folder: 'authform/booking-detail',
+            }),
+          });
+        }
+      }
+
+      console.log('Booking Image:', bookingImage);
+      console.log('Selected Flight:', selectedFlight);
       const payload = {
         bookingId: booking._id,
         bookingNo: booking.bookingNo,
@@ -262,26 +332,36 @@ export default function AuthForm({ booking }: AuthFormProps) {
         serviceType: values.serviceType,
 
         passengers: passengers
-          .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender && p.dob)
+          .filter((p) => p.title && p.firstName.trim() && p.lastName.trim() && p.gender)
           .map((p) => ({
             title: p.title,
             firstName: p.firstName,
             middleName: p.middleName,
             lastName: p.lastName,
             gender: p.gender,
-            dob: new Date(p.dob!),
+            dob: p.dob ? new Date(p.dob) : null,
           })),
 
         content,
         terms,
+
         bookingDetails,
+        bookingDetailsType,
+        itineraryData,
+
         charges,
+        taxesAndFee: Number(taxesAndFee) || 0,
+
         cards: cards.map((card) => ({
           ...card,
           expiryDate: card.expiryDate ? card.expiryDate.format('MM/YYYY') : '',
         })),
       };
+      console.log('Payload:', payload);
+      console.log('Payload Passengers:', payload.passengers);
 
+      console.log('Selected Flight', selectedFlight);
+      console.log('Payload', payload);
       console.log('Passengers State:', passengers);
       console.log('Payload Passengers:', payload.passengers);
 
@@ -355,11 +435,22 @@ export default function AuthForm({ booking }: AuthFormProps) {
           />
 
           <div style={{ marginTop: 24 }}>
-            <BookingDetails booking={booking} value={bookingImage} onChange={setBookingImage} />
+            <BookingDetails
+              booking={booking}
+              value={bookingImage}
+              onChange={setBookingImage}
+              selectedFlight={selectedFlight}
+              onFlightSelect={setSelectedFlight}
+            />
           </div>
         </Card>
 
-        <Charges value={charges} onChange={setCharges} />
+        <Charges
+          value={charges}
+          onChange={setCharges}
+          taxesAndFee={taxesAndFee}
+          onTaxesAndFeeChange={setTaxesAndFee}
+        />
 
         <CardInformation value={cards} onChange={setCards} totalAmount={totalAmount} />
 
@@ -370,8 +461,14 @@ export default function AuthForm({ booking }: AuthFormProps) {
             <Space>
               <Button onClick={handleCancel}>Cancel</Button>
 
-              <Button type="primary" htmlType="submit" loading={loading}>
-                {loading ? 'Saving...' : authFormId ? 'Update' : 'Save'}
+              <Button type="primary" htmlType="submit" loading={loading} disabled={paymentLocked}>
+                {loading
+                  ? 'Saving...'
+                  : paymentLocked
+                    ? 'Payment Verified'
+                    : authFormId
+                      ? 'Update'
+                      : 'Save'}
               </Button>
             </Space>
           </Row>

@@ -201,11 +201,12 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
                 label="Phone"
                 value={
                   booking.customer.mobile
-                    ? booking.customer.mobile.replace(
-                        /^(\+\d{1,4})(\d+)(\d{2})$/,
-                        (_, country, middle, last2) =>
-                          `${country}${'*'.repeat(middle.length)}${last2}`
-                      )
+                    ? booking.customer.mobile.startsWith('+')
+                      ? booking.customer.mobile.replace(
+                          /^(\+\d{1,4})(\d{2})\d+(\d{2})$/,
+                          '$1$2******$3'
+                        )
+                      : booking.customer.mobile.replace(/^(\d{2})\d+(\d{2})$/, '$1******$2')
                     : '-'
                 }
               />
@@ -244,7 +245,7 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
 
         <Divider className="my-4" />
 
-        <NotePost />
+        <NotePost bookingId={booking._id} />
       </Card>
     </div>
   );

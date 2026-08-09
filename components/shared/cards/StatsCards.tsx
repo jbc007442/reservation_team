@@ -1,56 +1,124 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Card, Col, Row, Skeleton, Typography } from 'antd';
+import { CalendarOutlined, RiseOutlined, WalletOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
 export interface StatCard {
   title: string;
   value: string | number;
-  change: string;
   icon: React.ReactNode;
   color: string;
 }
 
-interface StatsCardsProps {
-  stats: StatCard[];
-  loading?: boolean;
+interface StatsResponse {
+  totalBookings: number;
+
+  revenue: {
+    totalCharges: number;
+    taxesAndFee: number;
+    netGross: number;
+    netProfit: number;
+  };
 }
 
-export default function StatsCards({ stats, loading = false }: StatsCardsProps) {
+export default function StatsCards() {
+  const [stats, setStats] = useState<StatCard[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+
+      const response = await fetch('/api/dashboard/stats');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard statistics');
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to fetch dashboard statistics');
+      }
+
+      const data: StatsResponse = result.data;
+
+      setStats([
+        {
+          title: 'Total Bookings',
+          value: data.totalBookings,
+          icon: <CalendarOutlined />,
+          color: '#1677ff',
+        },
+        {
+          title: 'Net Gross',
+          value: data.revenue.netGross,
+          icon: <RiseOutlined />,
+          color: '#722ed1',
+        },
+        {
+          title: 'Net Profit',
+          value: data.revenue.netProfit,
+          icon: <WalletOutlined />,
+          color: '#16a34a',
+        },
+      ]);
+    } catch (error) {
+      console.error('Dashboard stats error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Row gutter={[24, 24]}>
-      {(loading ? Array.from({ length: stats.length }) : stats).map((item, index) => (
-        <Col xs={24} sm={12} lg={8} xl={8} key={loading ? index : (item as StatCard).title}>
+    <Row gutter={[16, 16]}>
+      {(loading ? Array.from({ length: 3 }) : stats).map((item, index) => (
+        <Col xs={24} sm={12} lg={8} key={loading ? index : (item as StatCard).title}>
           <Card
-            hoverable={!loading}
-            variant="borderless"
-            className="rounded-3xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+            style={{
+              borderRadius: 16,
+              border: 'none',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
+            }}
+            styles={{
+              body: {
+                padding: 18,
+              },
+            }}
           >
             {loading ? (
-              <Skeleton active avatar paragraph={{ rows: 2 }} />
+              <Skeleton active avatar={{ size: 'small' }} paragraph={{ rows: 1 }} />
             ) : (
               <div className="flex items-center justify-between">
-                <div>
-                  <Text className="text-sm text-gray-500">{(item as StatCard).title}</Text>
+                <div className="min-w-0">
+                  <Text type="secondary" className="text-xs font-medium">
+                    {(item as StatCard).title}
+                  </Text>
 
                   <Title
-                    level={2}
+                    level={3}
                     style={{
-                      marginTop: 8,
-                      marginBottom: 8,
+                      marginTop: 6,
+                      marginBottom: 0,
+                      fontSize: 24,
+                      lineHeight: 1.2,
                     }}
                   >
-                    {(item as StatCard).value}
+                    {typeof (item as StatCard).value === 'number'
+                      ? (item as StatCard).value.toLocaleString()
+                      : (item as StatCard).value}
                   </Title>
-
-                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-600">
-                    {(item as StatCard).change} this month
-                  </span>
                 </div>
 
                 <div
-                  className="flex h-16 w-16 items-center justify-center rounded-2xl text-3xl text-white shadow-lg"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg text-white shadow-sm"
                   style={{
                     backgroundColor: (item as StatCard).color,
                   }}

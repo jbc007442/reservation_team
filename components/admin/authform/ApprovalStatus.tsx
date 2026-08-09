@@ -127,13 +127,15 @@ export default function Billing({ booking }: BillingProps) {
             <Statistic
               title="Current Status"
               value={status.toUpperCase()}
-              valueStyle={{
-                color:
-                  status === 'approved'
-                    ? '#52c41a'
-                    : status === 'rejected'
-                    ? '#ff4d4f'
-                    : '#faad14',
+              styles={{
+                content: {
+                  color:
+                    status === 'approved'
+                      ? '#52c41a'
+                      : status === 'rejected'
+                        ? '#ff4d4f'
+                        : '#faad14',
+                },
               }}
             />
 
@@ -141,30 +143,22 @@ export default function Billing({ booking }: BillingProps) {
               {status === 'approved'
                 ? 'Approved'
                 : status === 'rejected'
-                ? 'Rejected'
-                : status === 'expired'
-                ? 'Expired'
-                : 'Waiting for Customer'}
+                  ? 'Rejected'
+                  : status === 'expired'
+                    ? 'Expired'
+                    : 'Waiting for Customer'}
             </Tag>
           </Card>
         </Col>
 
         <Col xs={24} md={8}>
           <Card size="small">
-            <Statistic
-              title="Approval Progress"
-              value={progress}
-              suffix="%"
-            />
+            <Statistic title="Approval Progress" value={progress} suffix="%" />
 
             <Progress
               percent={progress}
               status={
-                status === 'approved'
-                  ? 'success'
-                  : status === 'rejected'
-                  ? 'exception'
-                  : 'active'
+                status === 'approved' ? 'success' : status === 'rejected' ? 'exception' : 'active'
               }
               className="mt-2"
             />
@@ -173,14 +167,9 @@ export default function Billing({ booking }: BillingProps) {
 
         <Col xs={24} md={8}>
           <Card size="small">
-            <Statistic
-              title="Approval Method"
-              value="Email"
-            />
+            <Statistic title="Approval Method" value="Email" />
 
-            <div className="mt-3 text-sm text-slate-500">
-              Secure Authorization Link
-            </div>
+            <div className="mt-3 text-sm text-slate-500">Secure Authorization Link</div>
           </Card>
         </Col>
       </Row>
@@ -192,53 +181,43 @@ export default function Billing({ booking }: BillingProps) {
           items={[
             {
               title: 'Authorization Created',
-              description: data?.createdAt
+              content: data?.createdAt
                 ? dayjs(data.createdAt).format('DD MMM YYYY • hh:mm A')
                 : '-',
               icon: <CheckCircleOutlined />,
             },
             {
               title: 'Email Sent',
-              description:
-                data?.email?.lastSentAt ||
-                approval?.sentAt
-                  ? dayjs(
-                      data?.email?.lastSentAt ??
-                        approval?.sentAt
-                    ).format('DD MMM YYYY • hh:mm A')
+              content:
+                data?.email?.lastSentAt || approval?.sentAt
+                  ? dayjs(data?.email?.lastSentAt ?? approval?.sentAt).format(
+                      'DD MMM YYYY • hh:mm A'
+                    )
                   : 'Not Sent',
               icon: <SendOutlined />,
             },
             {
               title: 'Customer Approval',
-              description: (() => {
+              content: (() => {
                 switch (status) {
                   case 'approved':
                     return approval?.approvedAt
-                      ? dayjs(approval.approvedAt).format(
-                          'DD MMM YYYY • hh:mm A'
-                        )
+                      ? dayjs(approval.approvedAt).format('DD MMM YYYY • hh:mm A')
                       : 'Approved';
 
                   case 'submitted':
                     return approval?.submittedAt
-                      ? dayjs(approval.submittedAt).format(
-                          'DD MMM YYYY • hh:mm A'
-                        )
+                      ? dayjs(approval.submittedAt).format('DD MMM YYYY • hh:mm A')
                       : 'Submitted';
 
                   case 'opened':
                     return approval?.openedAt
-                      ? dayjs(approval.openedAt).format(
-                          'DD MMM YYYY • hh:mm A'
-                        )
+                      ? dayjs(approval.openedAt).format('DD MMM YYYY • hh:mm A')
                       : 'Opened';
 
                   case 'rejected':
                     return approval?.rejectedAt
-                      ? dayjs(approval.rejectedAt).format(
-                          'DD MMM YYYY • hh:mm A'
-                        )
+                      ? dayjs(approval.rejectedAt).format('DD MMM YYYY • hh:mm A')
                       : 'Rejected';
 
                   default:
@@ -249,10 +228,8 @@ export default function Billing({ booking }: BillingProps) {
             },
             {
               title: 'Booking Confirmed',
-              description: booking?.status === 'auth_completed'
-                ? 'Completed'
-                : 'Not Completed',
-              icon: <CloseCircleOutlined />
+              content: booking?.status === 'auth_completed' ? 'Completed' : 'Not Completed',
+              icon: <CloseCircleOutlined />,
             },
           ]}
         />
@@ -260,15 +237,9 @@ export default function Billing({ booking }: BillingProps) {
 
       <div className="mt-6 flex justify-end gap-2">
         <Space>
-          <Button disabled={status === 'approved'}>
-            Resend Email
-          </Button>
+          <Button disabled={status === 'approved'}>Resend Email</Button>
 
-          <Button
-            type="primary"
-            loading={loading}
-            onClick={fetchStatus}
-          >
+          <Button type="primary" loading={loading} onClick={fetchStatus}>
             Refresh Status
           </Button>
         </Space>

@@ -59,10 +59,40 @@ const PassengerSchema = new Schema(
 const ChargeSchema = new Schema(
   {
     description: String,
+
     amount: Number,
+
     currency: {
       type: String,
       default: 'USD',
+    },
+
+    transactionId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+
+    paymentStatus: {
+      type: String,
+      enum: ['Pending', 'Approved'],
+      default: 'Pending',
+    },
+
+    paymentDate: {
+      type: Date,
+      default: null,
+    },
+
+    verifiedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+
+    verifiedAt: {
+      type: Date,
+      default: null,
     },
   },
   { _id: false }
@@ -77,12 +107,6 @@ const CardSchema = new Schema(
     cardNumber: String,
     expiryDate: String,
     cvv: String,
-    amount: Number,
-    transactionId: { type: String, default: '', trim: true },
-    paymentStatus: { type: String, enum: ['Pending', 'Approved'], default: 'Pending' },
-    paymentDate: { type: Date, default: null },
-    verifiedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
-    verifiedAt: { type: Date, default: null },
     contactNumber: String,
     billingAddress: String,
   },
@@ -267,6 +291,8 @@ export interface IAuthForm extends Document {
 
   charges: unknown[];
 
+  taxesAndFee: number;
+
   cards: unknown[];
 
   billing: {
@@ -382,6 +408,11 @@ const AuthFormSchema = new Schema<IAuthForm>(
     },
 
     charges: [ChargeSchema],
+
+    taxesAndFee: {
+      type: Number,
+      default: 0,
+    },
 
     cards: [CardSchema],
 

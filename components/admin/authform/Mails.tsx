@@ -177,7 +177,7 @@ export default function MailHistory({ booking }: MailHistoryProps) {
         width={900}
       >
         {selectedMail && (
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <Space orientation="vertical" style={{ width: '100%' }} size={16}>
             <div>
               <strong>To:</strong> {selectedMail.to}
             </div>

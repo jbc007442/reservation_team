@@ -49,7 +49,7 @@ export default function User() {
 
   return (
     <Card
-      bordered={false}
+      variant="borderless"
       style={{
         borderRadius: 12,
       }}

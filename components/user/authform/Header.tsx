@@ -15,7 +15,7 @@ import {
 import { Button, Tag, Tooltip, Typography } from 'antd';
 import { useRouter } from 'next/navigation';
 
-import { Booking } from '@/components/admin/booking/types';
+import { Booking } from '@/components/user/booking/types';
 
 const { Title, Text } = Typography;
 
@@ -80,11 +80,12 @@ export default function Header({ booking }: HeaderProps) {
                 <PhoneOutlined />
                 <Text>
                   {booking.customer.mobile
-                    ? booking.customer.mobile.replace(
-                        /^(\+\d{1,4})(\d+)(\d{2})$/,
-                        (_, country, middle, last2) =>
-                          `${country}${'*'.repeat(middle.length)}${last2}`
-                      )
+                    ? booking.customer.mobile.startsWith('+')
+                      ? booking.customer.mobile.replace(
+                          /^(\+\d{1,4})(\d{2})\d+(\d{2})$/,
+                          '$1$2******$3'
+                        )
+                      : booking.customer.mobile.replace(/^(\d{2})\d+(\d{2})$/, '$1******$2')
                     : '-'}
                 </Text>
               </div>
@@ -131,6 +132,7 @@ export default function Header({ booking }: HeaderProps) {
       <SendEmailModal
         open={emailOpen}
         onClose={() => setEmailOpen(false)}
+        bookingId={booking._id}
         bookingNo={booking.bookingNo}
         email={booking.customer.email ?? ''}
         customerName={booking.customer.name}

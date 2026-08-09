@@ -11,80 +11,7 @@ import mongoose from 'mongoose';
 import { sendAuthorizationEmail } from '@/lib/email/sendAuthorizationEmail';
 
 /* ---------------- GET : Single Auth Form ---------------- */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    await connectDB();
-
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Unauthorized",
-        },
-        { status: 401 }
-      );
-    }
-
-    verifyToken(token);
-
-    const { id } = await params;
-
-    // Validate MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid Authorization Form ID.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const authForm = await AuthForm.findById(id).populate({
-      path: "bookingId",
-    });
-
-    if (!authForm) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Authorization Form not found.",
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: authForm,
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error("GET AuthForm Error:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        message: error.message || "Internal Server Error",
-      },
-      { status: 500 }
-    );
-  }
-}
-
-/* ---------------- PATCH : Update Auth Form ---------------- */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
@@ -102,6 +29,78 @@ export async function PATCH(
     }
 
     verifyToken(token);
+
+    const { id } = await params;
+
+    // Validate MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid Authorization Form ID.',
+        },
+        { status: 400 }
+      );
+    }
+
+    const authForm = await AuthForm.findById(id).populate({
+      path: 'bookingId',
+    });
+
+    if (!authForm) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Authorization Form not found.',
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: authForm,
+      },
+      { status: 200 }
+    );
+  } catch (error: any) {
+    console.error('GET AuthForm Error:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: error.message || 'Internal Server Error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/* ---------------- PATCH : Update Auth Form ---------------- */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await connectDB();
+
+    const cookieStore = await cookies();
+    const token = cookieStore.get('token')?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Unauthorized',
+        },
+        { status: 401 }
+      );
+    }
+
+    const decoded = verifyToken(token) as {
+      id: string;
+      role: string;
+      email: string;
+      name: string;
+    };
 
     const { id } = await params;
 
@@ -188,6 +187,17 @@ export async function PATCH(
       sentAt: new Date(),
     });
 
+    /* ---------------- Timeline ---------------- */
+    console.log('Decoded:', decoded);
+    console.log('performedBy:', decoded.id);
+    authForm.timeline.push({
+      action: 'Authorization Form Updated',
+      description: 'Authorization form updated by staff.',
+      performedBy: decoded.id,
+      source: 'staff',
+      createdAt: new Date(),
+    });
+
     await authForm.save();
 
     return NextResponse.json(
@@ -199,12 +209,12 @@ export async function PATCH(
       { status: 200 }
     );
   } catch (error: any) {
-    console.error("PATCH AuthForm Error:", error);
+    console.error('PATCH AuthForm Error:', error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Internal Server Error",
+        message: error.message || 'Internal Server Error',
       },
       { status: 500 }
     );
@@ -212,21 +222,18 @@ export async function PATCH(
 }
 
 /* ---------------- DELETE : Delete Auth Form ---------------- */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
+    const token = cookieStore.get('token')?.value;
 
     if (!token) {
       return NextResponse.json(
         {
           success: false,
-          message: "Unauthorized",
+          message: 'Unauthorized',
         },
         { status: 401 }
       );
@@ -241,7 +248,7 @@ export async function DELETE(
       return NextResponse.json(
         {
           success: false,
-          message: "Invalid Authorization Form ID.",
+          message: 'Invalid Authorization Form ID.',
         },
         { status: 400 }
       );
@@ -253,7 +260,7 @@ export async function DELETE(
       return NextResponse.json(
         {
           success: false,
-          message: "Authorization Form not found.",
+          message: 'Authorization Form not found.',
         },
         { status: 404 }
       );
@@ -262,21 +269,19 @@ export async function DELETE(
     return NextResponse.json(
       {
         success: true,
-        message: "Authorization Form deleted successfully.",
+        message: 'Authorization Form deleted successfully.',
       },
       { status: 200 }
     );
   } catch (error: any) {
-    console.error("DELETE AuthForm Error:", error);
+    console.error('DELETE AuthForm Error:', error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || "Internal Server Error",
+        message: error.message || 'Internal Server Error',
       },
       { status: 500 }
     );
   }
 }
-
-

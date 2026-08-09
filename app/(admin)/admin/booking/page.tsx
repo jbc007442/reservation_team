@@ -113,7 +113,11 @@ export default function BookingsPage() {
               title="Booking Created"
               value={stats.bookingCreated}
               prefix={<CalendarOutlined />}
-              valueStyle={{ color: '#1677ff' }}
+              styles={{
+                content: {
+                  color: '#1677ff',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -124,7 +128,11 @@ export default function BookingsPage() {
               title="Auth Pending"
               value={stats.authPending}
               prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#faad14' }}
+              styles={{
+                content: {
+                  color: '#faad14',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -135,7 +143,11 @@ export default function BookingsPage() {
               title="Auth Completed"
               value={stats.authCompleted}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
+              styles={{
+                content: {
+                  color: '#52c41a',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -146,7 +158,11 @@ export default function BookingsPage() {
               title="Ticketed"
               value={stats.ticketed}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#389e0d' }}
+              styles={{
+                content: {
+                  color: '#389e0d',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -157,7 +173,11 @@ export default function BookingsPage() {
               title="Card Charged"
               value={stats.cardCharged}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
+              styles={{
+                content: {
+                  color: '#52c41a',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -168,7 +188,11 @@ export default function BookingsPage() {
               title="Card Declined"
               value={stats.cardDecline}
               prefix={<CloseCircleOutlined />}
-              valueStyle={{ color: '#cf1322' }}
+              styles={{
+                content: {
+                  color: '#cf1322',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -179,7 +203,11 @@ export default function BookingsPage() {
               title="Refunded"
               value={stats.refunded}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#13c2c2' }}
+              styles={{
+                content: {
+                  color: '#13c2c2',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -190,7 +218,11 @@ export default function BookingsPage() {
               title="Charge Back"
               value={stats.chargeBack}
               prefix={<CloseCircleOutlined />}
-              valueStyle={{ color: '#fa541c' }}
+              styles={{
+                content: {
+                  color: '#fa541c',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -201,7 +233,11 @@ export default function BookingsPage() {
               title="Follow Up"
               value={stats.followUp}
               prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#d4b106' }}
+              styles={{
+                content: {
+                  color: '#d4b106',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -212,7 +248,11 @@ export default function BookingsPage() {
               title="Cancelled"
               value={stats.cancelled}
               prefix={<CloseCircleOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
+              styles={{
+                content: {
+                  color: '#ff4d4f',
+                },
+              }}
             />
           </Card>
         </Col>
@@ -222,7 +262,12 @@ export default function BookingsPage() {
         <BookingTable />
       </Card>
 
-      <BookingDialog open={open} onClose={handleClose} onSuccess={handleClose} booking={selectedBooking} />
+      <BookingDialog
+        open={open}
+        onClose={handleClose}
+        onSuccess={handleClose}
+        booking={selectedBooking}
+      />
     </div>
   );
 }

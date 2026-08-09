@@ -1,0 +1,81 @@
+.flight-card{
+
+    border-radius:14px;
+
+    border:1px solid #ececec;
+
+    transition:.25s;
+
+    box-shadow:0 2px 8px rgba(0,0,0,.05);
+
+}
+
+.flight-card:hover{
+
+    transform:translateY(-2px);
+
+    box-shadow:0 12px 30px rgba(0,0,0,.10);
+
+}
+
+.flight-card-selected{
+
+    border:2px solid #1677ff;
+
+}
+.flight-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.flight-airline{
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.flight-airline img{
+  width:48px;
+  height:48px;
+  object-fit:contain;
+}
+
+.flight-airline-name{
+  font-size:18px;
+  font-weight:600;
+  line-height:1.2;
+}
+
+.flight-airline-number{
+  color:#6b7280;
+  font-size:14px;
+}
+
+.flight-class{
+  margin-top:6px;
+}
+
+.flight-right{
+  display:flex;
+  align-items:center;
+  gap:20px;
+}
+
+.flight-carbon{
+  text-align:center;
+}
+
+.flight-carbon-value{
+  font-size:18px;
+  font-weight:700;
+}
+
+.flight-carbon-label{
+  font-size:12px;
+  color:#6b7280;
+}
+
+.flight-select{
+  min-width:140px;
+}

@@ -1,21 +1,43 @@
 import { Booking } from '@/components/admin/booking/types';
 
-interface Passenger {
-  title: string;
-  firstName: string;
-  lastName: string;
-  gender: string;
-  dob: string;
-  eTicketNo?: string;
-}
-
 interface EticketTemplateProps {
   booking: Booking;
   authForm: any;
-  passenger: Passenger;
 }
 
-export function eticketTemplate({ booking, authForm, passenger }: EticketTemplateProps) {
+export function eticketTemplate({ booking, authForm }: EticketTemplateProps) {
+  const passengerRows =
+    authForm.passengers?.length > 0
+      ? authForm.passengers
+          .map(
+            (passenger: any, index: number) => `
+<tr>
+  <td style="padding:14px;border:1px solid #e5e7eb;text-align:center;">
+    ${index + 1}
+  </td>
+
+  <td style="padding:14px;border:1px solid #e5e7eb;">
+    ${passenger.title} ${passenger.firstName} ${passenger.lastName}
+  </td>
+
+  <td style="padding:14px;border:1px solid #e5e7eb;text-align:center;">
+    ${passenger.gender}
+  </td>
+
+  <td style="padding:14px;border:1px solid #e5e7eb;text-align:center;font-weight:bold;color:#2563eb;">
+    ${passenger.eTicketNo || '-'}
+  </td>
+</tr>
+`
+          )
+          .join('')
+      : `
+<tr>
+  <td colspan="4" style="padding:20px;text-align:center;color:#64748b;">
+    No passengers found.
+  </td>
+</tr>
+`;
   return `
 <!DOCTYPE html>
 <html>
@@ -121,51 +143,37 @@ ${booking.service}
 <td style="padding:0 35px;">
 
 <h3 style="margin:0 0 15px;">
-Passenger
+Passengers
 </h3>
 
-<table width="100%" style="border-collapse:collapse;">
+<table
+  width="100%"
+  cellpadding="0"
+  cellspacing="0"
+  style="border-collapse:collapse;"
+>
 
-<tr>
-<td style="padding:14px;border:1px solid #e5e7eb;">
+<tr style="background:#f8fafc;">
+
+<th style="padding:14px;border:1px solid #e5e7eb;">
+#
+</th>
+
+<th style="padding:14px;border:1px solid #e5e7eb;text-align:left;">
 Passenger
-</td>
+</th>
 
-<td style="padding:14px;border:1px solid #e5e7eb;">
-${passenger.title} ${passenger.firstName} ${passenger.lastName}
-</td>
-</tr>
-
-<tr>
-
-<td style="padding:14px;border:1px solid #e5e7eb;">
+<th style="padding:14px;border:1px solid #e5e7eb;">
 Gender
-</td>
+</th>
 
-<td style="padding:14px;border:1px solid #e5e7eb;">
-${passenger.gender}
-</td>
-
-</tr>
-
-<tr>
-
-<td style="padding:14px;border:1px solid #e5e7eb;">
+<th style="padding:14px;border:1px solid #e5e7eb;">
 E-Ticket Number
-</td>
-
-<td style="
-padding:14px;
-border:1px solid #e5e7eb;
-font-size:20px;
-font-weight:bold;
-color:#2563eb;">
-
-${passenger.eTicketNo}
-
-</td>
+</th>
 
 </tr>
+
+${passengerRows}
 
 </table>
 

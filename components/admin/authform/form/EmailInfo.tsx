@@ -7,12 +7,6 @@ interface EmailInfoProps {
   booking: Booking;
 }
 
-const maskEmail = (email?: string) => {
-  if (!email) return '';
-
-  return email.replace(/^(.{2})[^@]*(@.*)$/, '$1******$2');
-};
-
 export default function EmailInfo({ booking }: EmailInfoProps) {
   return (
     <Row gutter={16}>
@@ -24,7 +18,7 @@ export default function EmailInfo({ booking }: EmailInfoProps) {
 
       <Col xs={24} md={12}>
         <Form.Item label="Customer Email">
-          <Input value={maskEmail(booking.customer.email)} readOnly />
+          <Input value={booking.customer.email || ''} readOnly />
         </Form.Item>
       </Col>
 

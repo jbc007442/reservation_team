@@ -1,14 +1,25 @@
 'use client';
-import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
-
-import { Button, Card, Col, DatePicker, Form, Input, InputNumber, Row, Select, Space } from 'antd';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
-import { useRouter } from 'next/navigation';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { App } from 'antd';
-import airports from '@/lib/airports';
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Tabs,
+} from 'antd';
+import { useRouter } from 'next/navigation';
 import PhoneInput from 'react-phone-input-2';
+// @ts-ignore: CSS module side-effect import without type declarations
 import 'react-phone-input-2/lib/style.css';
 const { TextArea } = Input;
 
@@ -25,6 +36,24 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
   const { message } = App.useApp();
   const [passengerTypeLocked, setPassengerTypeLocked] = useState(false);
   const isEdit = !!booking;
+  const [airportOptions, setAirportOptions] = useState<{ value: string; label: string }[]>([]);
+
+  const searchAirports = async (value: string) => {
+    if (!value) {
+      setAirportOptions([]);
+      return;
+    }
+
+    const res = await fetch(`/api/airport?q=${encodeURIComponent(value)}`);
+    const data = await res.json();
+
+    setAirportOptions(
+      data.map((airport: any) => ({
+        value: airport.iata,
+        label: `${airport.city} (${airport.iata}) - ${airport.name}`,
+      }))
+    );
+  };
 
   const checkExistingCustomer = async (mobile: string) => {
     if (!mobile) return;
@@ -74,6 +103,7 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
 
       toDate: booking.journey?.returnDate ? dayjs(booking.journey.returnDate) : null,
 
+      tripType: booking.journey?.tripType || 'roundtrip',
       adults: booking.journey?.adults,
       child: booking.journey?.children,
       infant: booking.journey?.infants,
@@ -101,6 +131,7 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
           email: values.email,
         },
         journey: {
+          tripType: values.tripType,
           fromCity: values.fromCity,
           toCity: values.toCity,
           departureDate: values.fromDate?.toDate(),
@@ -175,6 +206,7 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
       size="small"
       onFinish={handleFinish}
       initialValues={{
+        tripType: 'roundtrip',
         type: 'Client',
         title: 'Mr.',
         adults: 1,
@@ -265,6 +297,31 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
+          <Col span={24}>
+            <Form.Item name="tripType" noStyle>
+              <Tabs
+                activeKey={Form.useWatch('tripType', form) || 'roundtrip'}
+                onChange={(key) => {
+                  form.setFieldValue('tripType', key);
+
+                  if (key === 'oneway') {
+                    form.setFieldValue('toDate', null);
+                  }
+                }}
+                items={[
+                  {
+                    key: 'oneway',
+                    label: 'One Way',
+                  },
+                  {
+                    key: 'roundtrip',
+                    label: 'Round Trip',
+                  },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+
           {/* Journey */}
           <Col xs={24} md={12}>
             <Form.Item
@@ -273,17 +330,14 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
               rules={[{ required: true, message: 'Please select departure airport' }]}
             >
               <Select
-                showSearch
                 size="large"
                 placeholder="Select Departure Airport"
-                optionFilterProp="label"
-                filterOption={(input, option) =>
-                  (option?.label as string).toLowerCase().includes(input.toLowerCase())
-                }
-                options={airports.map((airport: any) => ({
-                  value: airport.iata,
-                  label: `${airport.city} (${airport.iata}) - ${airport.name}`,
-                }))}
+                showSearch={{
+                  filterOption: false,
+                  onSearch: searchAirports,
+                }}
+                options={airportOptions}
+                notFoundContent="Type at least 2 characters..."
               />
             </Form.Item>
           </Col>
@@ -295,17 +349,14 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
               rules={[{ required: true, message: 'Please select destination airport' }]}
             >
               <Select
-                showSearch
                 size="large"
                 placeholder="Select Destination Airport"
-                optionFilterProp="label"
-                filterOption={(input, option) =>
-                  (option?.label as string).toLowerCase().includes(input.toLowerCase())
-                }
-                options={airports.map((airport: any) => ({
-                  value: airport.iata,
-                  label: `${airport.city} (${airport.iata}) - ${airport.name}`,
-                }))}
+                showSearch={{
+                  filterOption: false,
+                  onSearch: searchAirports,
+                }}
+                options={airportOptions}
+                notFoundContent="Type at least 2 characters..."
               />
             </Form.Item>
           </Col>
@@ -316,11 +367,26 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
-          <Col xs={24} md={12}>
-            <Form.Item label="Return" name="toDate" rules={[{ required: true }]}>
-              <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
-            </Form.Item>
-          </Col>
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.tripType !== curr.tripType}>
+            {({ getFieldValue }) =>
+              getFieldValue('tripType') === 'roundtrip' && (
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    label="Return"
+                    name="toDate"
+                    rules={[
+                      {
+                        required: true,
+                        message: 'Please select return date',
+                      },
+                    ]}
+                  >
+                    <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
+                  </Form.Item>
+                </Col>
+              )
+            }
+          </Form.Item>
 
           {/* Passenger */}
           <Col xs={8}>

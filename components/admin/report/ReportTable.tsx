@@ -3,10 +3,6 @@
 import { Card, Input, Space, Table, Button } from 'antd';
 import { SearchOutlined, FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons';
 
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-
 import { reportColumns } from './column';
 import type { ReportData } from './types';
 
@@ -41,7 +37,9 @@ const data: ReportData[] = [
 ];
 
 export default function ReportsPage() {
-  const exportExcel = () => {
+  const exportExcel = async () => {
+    const XLSX = await import('xlsx');
+
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
 
@@ -49,7 +47,12 @@ export default function ReportsPage() {
     XLSX.writeFile(workbook, 'Reports.xlsx');
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+
     const doc = new jsPDF();
 
     doc.text('Reports', 14, 15);

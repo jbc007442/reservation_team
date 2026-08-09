@@ -29,17 +29,22 @@ type UserRole = 'admin' | 'employee';
 
 interface PaymentItem {
   key: string;
-  cardEnding: string;
-  cardHolder: string;
+  description: string;
   amount: number;
+  currency: string;
   transactionId: string;
   status: 'Pending' | 'Approved';
 }
 
-interface ChargeItem {
-  description: string;
-  amount: number;
-  currency: string;
+interface CardItem {
+  key: string;
+  cardType: string;
+  cardHolderName: string;
+  cardNumber: string;
+  expiryDate: string;
+  cvv: string;
+  contactNumber: string;
+  billingAddress: string;
 }
 
 interface BillingProps {
@@ -51,7 +56,7 @@ export default function Billing({ booking }: BillingProps) {
   const role = (user?.role as UserRole) || 'employee';
 
   const [payments, setPayments] = useState<PaymentItem[]>([]);
-  const [charges, setCharges] = useState<ChargeItem[]>([]);
+  const [cards, setCards] = useState<CardItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [bookingInfo, setBookingInfo] = useState({
@@ -77,8 +82,8 @@ export default function Billing({ booking }: BillingProps) {
           customer: '',
         });
 
-        setCharges([]);
         setPayments([]);
+        setCards([]);
         return;
       }
 
@@ -90,24 +95,29 @@ export default function Billing({ booking }: BillingProps) {
           : '',
       });
 
-      setCharges(
-        (result.data.charges || []).map((charge: any) => ({
-          description: charge.description,
-          amount: Number(charge.amount || 0),
-          currency: charge.currency || 'USD',
-        }))
-      );
-
-      const rows: PaymentItem[] = (result.data.cards || []).map((card: any, index: number) => ({
+      const rows: PaymentItem[] = (result.data.charges || []).map((charge: any, index: number) => ({
         key: String(index),
-        cardEnding: card.cardNumber ? `****${card.cardNumber.slice(-4)}` : '-',
-        cardHolder: card.cardHolderName || '-',
-        amount: Number(card.amount || 0),
-        transactionId: card.transactionId || '',
-        status: card.paymentStatus || 'Pending',
+        description: charge.description,
+        amount: Number(charge.amount || 0),
+        currency: charge.currency || 'USD',
+        transactionId: charge.transactionId || '',
+        status: charge.paymentStatus || 'Pending',
       }));
 
       setPayments(rows);
+
+      const cardRows: CardItem[] = (result.data.cards || []).map((card: any, index: number) => ({
+        key: String(index),
+        cardType: card.cardType || '',
+        cardHolderName: card.cardHolderName || '',
+        cardNumber: card.cardNumber || '',
+        expiryDate: card.expiryDate || '',
+        cvv: card.cvv || '',
+        contactNumber: card.contactNumber || '',
+        billingAddress: card.billingAddress || '',
+      }));
+
+      setCards(cardRows);
     } catch (err) {
       console.error(err);
       message.error('Failed to load payment details.');
@@ -116,7 +126,7 @@ export default function Billing({ booking }: BillingProps) {
     }
   };
 
-  const total = charges.reduce((sum, item) => sum + item.amount, 0);
+  const total = payments.reduce((sum, item) => sum + item.amount, 0);
 
   const approved = payments
     .filter((item) => item.status === 'Approved')
@@ -125,10 +135,7 @@ export default function Billing({ booking }: BillingProps) {
   const balance = total - approved;
 
   const paymentApproved =
-    payments.length > 0 &&
-    charges.length > 0 &&
-    balance === 0 &&
-    payments.every((item) => item.status === 'Approved');
+    payments.length > 0 && balance === 0 && payments.every((item) => item.status === 'Approved');
 
   const handleTransactionChange = (key: string, value: string) => {
     setPayments((prev) =>
@@ -143,18 +150,21 @@ export default function Billing({ booking }: BillingProps) {
     );
   };
 
-  const saveTransaction = async (key: string) => {
+  const saveTransaction = async (record: PaymentItem) => {
     try {
-      const updatedPayments = payments.map((item) =>
-        item.key === key
-          ? {
-              ...item,
-              status: (item.transactionId ? 'Approved' : 'Pending') as 'Pending' | 'Approved',
-            }
-          : item
-      );
+      const status: 'Pending' | 'Approved' = record.transactionId.trim() ? 'Approved' : 'Pending';
 
-      setPayments(updatedPayments);
+      // Update UI immediately
+      setPayments((prev) =>
+        prev.map((item) =>
+          item.key === record.key
+            ? {
+                ...item,
+                status,
+              }
+            : item
+        )
+      );
 
       const res = await fetch(`/api/authform/billing/${booking._id}`, {
         method: 'PATCH',
@@ -162,51 +172,42 @@ export default function Billing({ booking }: BillingProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          cards: updatedPayments,
+          chargeIndex: Number(record.key),
+          transactionId: record.transactionId,
+          status,
           userId: user?._id,
         }),
       });
 
       const result = await res.json();
 
-      if (result.success) {
-        message.success(result.message);
-      } else {
-        message.error(result.message);
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Failed to update payment.');
       }
-    } catch (err) {
+
+      message.success(result.message);
+
+      // Reload latest data
+      loadPayments();
+    } catch (err: any) {
       console.error(err);
-      message.error('Failed to update payment.');
+      loadPayments(); // restore latest values from database
+      message.error(err.message || 'Failed to update payment.');
     }
   };
 
-  const chargeColumns = [
+  const columns = [
     {
-      title: 'Description',
+      title: 'Charge',
       dataIndex: 'description',
     },
     {
       title: 'Amount',
-      render: (_: any, record: ChargeItem) => `$${record.amount.toLocaleString()}`,
+      render: (_: any, record: PaymentItem) => `$${record.amount.toLocaleString()}`,
     },
     {
       title: 'Currency',
       dataIndex: 'currency',
-    },
-  ];
-
-  const columns = [
-    {
-      title: 'Card',
-      dataIndex: 'cardEnding',
-    },
-    {
-      title: 'Card Holder',
-      dataIndex: 'cardHolder',
-    },
-    {
-      title: 'Amount',
-      render: (_: any, record: PaymentItem) => `$${record.amount.toLocaleString()}`,
     },
     {
       title: 'Transaction ID',
@@ -215,7 +216,6 @@ export default function Billing({ booking }: BillingProps) {
           <Input
             value={record.transactionId}
             placeholder="Enter Transaction ID"
-            readOnly={record.status === 'Approved'}
             onChange={(e) => handleTransactionChange(record.key, e.target.value)}
           />
         ) : (
@@ -228,23 +228,22 @@ export default function Billing({ booking }: BillingProps) {
         <Tag color={record.status === 'Approved' ? 'green' : 'orange'}>{record.status}</Tag>
       ),
     },
-    ...(role === 'admin'
-      ? [
-          {
-            title: 'Action',
-            render: (_: any, record: PaymentItem) => (
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                disabled={record.status === 'Approved'}
-                onClick={() => saveTransaction(record.key)}
-              >
-                {record.status === 'Approved' ? 'Verified' : 'Save'}
-              </Button>
-            ),
-          },
-        ]
-      : []),
+    {
+      title: 'Action',
+      render: (_: any, record: PaymentItem) =>
+        role === 'admin' ? (
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            disabled={!record.transactionId.trim()}
+            onClick={() => saveTransaction(record)}
+          >
+            Save
+          </Button>
+        ) : (
+          '-'
+        ),
+    },
   ];
 
   return (
@@ -274,23 +273,48 @@ export default function Billing({ booking }: BillingProps) {
           </Tag>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Cards">{payments.length}</Descriptions.Item>
+        <Descriptions.Item label="Charges">{payments.length}</Descriptions.Item>
       </Descriptions>
 
-      <Divider>Charges</Divider>
-
-      <Table rowKey="description" pagination={false} columns={chargeColumns} dataSource={charges} />
-
-      <Divider>Payment Cards</Divider>
+      <Divider>Payment Verification</Divider>
 
       <Table rowKey="key" pagination={false} columns={columns} dataSource={payments} />
 
-      <Divider />
+      <Divider>Card Information</Divider>
+
+      <Table
+        rowKey="key"
+        pagination={false}
+        dataSource={cards}
+        columns={[
+          {
+            title: 'Card Type',
+            dataIndex: 'cardType',
+          },
+          {
+            title: 'Card Holder',
+            dataIndex: 'cardHolderName',
+          },
+          {
+            title: 'Card Number',
+            dataIndex: 'cardNumber',
+          },
+          {
+            title: 'CVV',
+            dataIndex: 'cvv',
+          },
+          {
+            title: 'Expiry',
+            dataIndex: 'expiryDate',
+          },
+        ]}
+      />
 
       <div
         style={{
           maxWidth: 350,
           marginLeft: 'auto',
+          marginTop: 25,
         }}
       >
         <Descriptions bordered column={1} size="small">

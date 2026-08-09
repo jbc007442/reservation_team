@@ -1,9 +1,33 @@
 'use client';
+import { useEffect, useState } from 'react';
 
-import { Card, Typography, Upload } from 'antd';
-import { InboxOutlined, DeleteOutlined } from '@ant-design/icons';
-import type { UploadFile } from 'antd/es/upload/interface';
 import { Booking } from '@/components/user/booking/types';
+import {
+  CalendarOutlined,
+  CarOutlined,
+  DeleteOutlined,
+  EnvironmentOutlined,
+  InboxOutlined,
+  SearchOutlined,
+  SwapOutlined,
+} from '@ant-design/icons';
+import {
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Input,
+  message,
+  Row,
+  Select,
+  Skeleton,
+  Tabs,
+  Typography,
+  Upload,
+} from 'antd';
+import type { UploadFile } from 'antd/es/upload/interface';
+import dayjs from 'dayjs';
+import FlightCard from './flight/FlightCard';
 
 const { Text } = Typography;
 
@@ -11,9 +35,115 @@ interface BookingDetailsProps {
   booking: Booking;
   value: UploadFile | null;
   onChange: (file: UploadFile | null) => void;
+  selectedFlight?: any;
+  onFlightSelect?: (flight: any) => void;
 }
 
-const BookingDetails = ({ booking, value, onChange }: BookingDetailsProps) => {
+const BookingDetails = ({
+  booking,
+  value,
+  onChange,
+  selectedFlight,
+  onFlightSelect,
+}: BookingDetailsProps) => {
+  const [departureId, setDepartureId] = useState('');
+  const [arrivalId, setArrivalId] = useState('');
+  const [outboundDate, setOutboundDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
+  const [tripType, setTripType] = useState('round');
+  const [adults, setAdults] = useState(1);
+  const [children, setChildren] = useState(0);
+  const [infants, setInfants] = useState(0);
+  const [travelClass, setTravelClass] = useState('economy');
+  const [loading, setLoading] = useState(false);
+
+  const [departureFlights, setDepartureFlights] = useState<any[]>([]);
+  const [returnFlights, setReturnFlights] = useState<any[]>([]);
+
+  const [selectedStops, setSelectedStops] = useState<string[]>([]);
+  const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
+
+  const [selectedDeparture, setSelectedDeparture] = useState<any>(null);
+  const [selectedReturn, setSelectedReturn] = useState<any>(null);
+
+  const [step, setStep] = useState<'departure' | 'return'>('departure');
+
+  useEffect(() => {
+    if (!selectedFlight) {
+      setSelectedDeparture(null);
+      setSelectedReturn(null);
+      setStep('departure');
+      return;
+    }
+
+    setSelectedDeparture(selectedFlight.departure || null);
+    setSelectedReturn(selectedFlight.return || null);
+
+    if (selectedFlight.return) {
+      setStep('return');
+    } else {
+      setStep('departure');
+    }
+  }, [selectedFlight]);
+
+
+  const allFlights = step === 'departure' ? departureFlights : returnFlights;
+
+  const airlines = [...new Set(allFlights.map((f) => f.flights?.[0]?.airline))];
+
+  const flights = allFlights.filter((flight) => {
+    const stops = Math.max(0, (flight.flights?.length || 1) - 1);
+
+    const airline = flight.flights?.[0]?.airline;
+
+    const stopMatch = selectedStops.length === 0 || selectedStops.includes(String(stops));
+
+    const airlineMatch = selectedAirlines.length === 0 || selectedAirlines.includes(airline);
+
+    return stopMatch && airlineMatch;
+  });
+
+  const fetchFlights = async () => {
+    try {
+      setLoading(true);
+
+      const res = await fetch(
+        '/api/flights/search?' +
+          new URLSearchParams({
+            departure_id: departureId,
+            arrival_id: arrivalId,
+            outbound_date: outboundDate,
+            return_date: returnDate,
+            flight_type: tripType === 'round' ? 'round_trip' : 'one_way',
+            adults: adults.toString(),
+            children: children.toString(),
+            infants_on_lap: infants.toString(),
+            travel_class: travelClass === 'first' ? 'first_class' : travelClass,
+            currency: 'USD',
+          })
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Search failed');
+      }
+
+      setDepartureFlights(data.best_flights || []);
+      setReturnFlights([]);
+
+      setSelectedDeparture(null);
+      setSelectedReturn(null);
+
+      setStep('departure');
+      message.success('Flights loaded');
+    } catch (err: any) {
+      message.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Card
       title="Booking Details"
@@ -22,97 +152,484 @@ const BookingDetails = ({ booking, value, onChange }: BookingDetailsProps) => {
         borderRadius: 10,
       }}
     >
-      <Text type="secondary">Upload itinerary, ticket, voucher or booking image.</Text>
+      <Tabs
+        defaultActiveKey="image"
+        onChange={(key) => {
+          if (key === 'api') {
+            onChange(null); // Clear uploaded image
+          }
 
-      <div style={{ marginTop: 20 }}>
-        <Upload
-          accept="image/*"
-          maxCount={1}
-          showUploadList={false}
-          beforeUpload={(file) => {
-            onChange({
-              uid: file.uid,
-              name: file.name,
-              originFileObj: file,
-            });
+          if (key === 'image') {
+            onFlightSelect?.(null); // Clear itinerary
+          }
+        }}
+        items={[
+          {
+            key: 'image',
+            label: 'Upload Image',
+            children: (
+              <>
+                <Text type="secondary">Upload itinerary, ticket, voucher or booking image.</Text>
 
-            return false;
-          }}
-        >
-          <div style={{ width: '100%' }}>
-            {value ? (
-              <div
-                className="booking-upload-preview"
-                style={{
-                  position: 'relative',
-                  width: '100%',
-                  height: 260,
-                  border: '1px dashed #d9d9d9',
-                  borderRadius: 10,
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                }}
-              >
-                <img
-                  src={
-                    value.originFileObj
-                      ? URL.createObjectURL(value.originFileObj as File)
-                      : value.url
-                  }
-                  alt="Booking"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    display: 'block',
-                  }}
-                />
+                <div style={{ marginTop: 20 }}>
+                  <Upload
+                    accept="image/*"
+                    maxCount={1}
+                    showUploadList={false}
+                    beforeUpload={(file) => {
+                      onFlightSelect?.(null); // Clear selected itinerary
 
-                <div className="booking-upload-overlay">
-                  <DeleteOutlined
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onChange(null);
+                      onChange({
+                        uid: file.uid,
+                        name: file.name,
+                        originFileObj: file,
+                      });
+
+                      return false;
                     }}
-                    style={{
-                      color: '#fff',
-                      fontSize: 32,
-                    }}
-                  />
+                  >
+                    <div style={{ width: '100%' }}>
+                      {value ? (
+                        <div
+                          className="booking-upload-preview"
+                          style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: 260,
+                            border: '1px dashed #d9d9d9',
+                            borderRadius: 10,
+                            overflow: 'hidden',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <img
+                            src={
+                              value.originFileObj
+                                ? URL.createObjectURL(value.originFileObj as File)
+                                : value.url
+                            }
+                            alt="Booking"
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
+                          />
+
+                          <div className="booking-upload-overlay">
+                            <DeleteOutlined
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onChange(null);
+                              }}
+                              style={{
+                                color: '#fff',
+                                fontSize: 32,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            width: '100%',
+                            minHeight: 260,
+                            border: '1px dashed #d9d9d9',
+                            borderRadius: 10,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <InboxOutlined
+                            style={{
+                              fontSize: 52,
+                              color: '#1677ff',
+                              marginBottom: 16,
+                            }}
+                          />
+
+                          <h2>Click or drag image to select</h2>
+
+                          <Text type="secondary">JPG, PNG, WEBP (Single Image)</Text>
+                        </div>
+                      )}
+                    </div>
+                  </Upload>
                 </div>
-              </div>
-            ) : (
-              <div
-                style={{
-                  width: '100%',
-                  minHeight: 260,
-                  border: '1px dashed #d9d9d9',
-                  borderRadius: 10,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: 24,
-                  textAlign: 'center',
-                }}
-              >
-                <InboxOutlined
-                  style={{
-                    fontSize: 52,
-                    color: '#1677ff',
-                    marginBottom: 16,
-                  }}
-                />
+              </>
+            ),
+          },
 
-                <h2 style={{ margin: 0, marginBottom: 8 }}>Click or drag image to select</h2>
+          {
+            key: 'api',
+            label: 'Fetch Itinerary',
+            children: (
+              <>
+                {!selectedFlight ? (
+                  <Card
+                    bordered={false}
+                    style={{
+                      borderRadius: 20,
+                      background: '#f8fafc',
+                      marginBottom: 24,
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    {/* Top Options */}
+                    <Row gutter={16} style={{ marginBottom: 20 }}>
+                      <Col xs={24} sm={12} md={5}>
+                        <Select
+                          size="large"
+                          value={tripType}
+                          onChange={setTripType}
+                          style={{ width: '100%' }}
+                          suffixIcon={<SwapOutlined />}
+                          options={[
+                            { value: 'round', label: 'Round Trip' },
+                            { value: 'oneway', label: 'One Way' },
+                          ]}
+                        />
+                      </Col>
 
-                <Text type="secondary">JPG, PNG, WEBP (Single Image)</Text>
-              </div>
-            )}
-          </div>
-        </Upload>
-      </div>
+                      <Col xs={24} sm={12} md={6}>
+                        <Select
+                          size="large"
+                          value={travelClass}
+                          onChange={setTravelClass}
+                          style={{ width: '100%' }}
+                          suffixIcon={<CarOutlined />}
+                          options={[
+                            { value: 'economy', label: 'Economy' },
+                            { value: 'premium_economy', label: 'Premium Economy' },
+                            { value: 'business', label: 'Business' },
+                            { value: 'first', label: 'First Class' },
+                          ]}
+                        />
+                      </Col>
+                    </Row>
+
+                    {/* Search Fields */}
+                    <Row gutter={16} align="middle">
+                      <Col xs={24} md={6}>
+                        <Input
+                          size="large"
+                          prefix={<EnvironmentOutlined />}
+                          placeholder="From"
+                          value={departureId}
+                          onChange={(e) => setDepartureId(e.target.value.toUpperCase())}
+                          style={{ height: 54, borderRadius: 14 }}
+                        />
+                      </Col>
+
+                      <Col
+                        xs={24}
+                        md={1}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Button
+                          shape="circle"
+                          icon={<SwapOutlined />}
+                          size="large"
+                          onClick={() => {
+                            const temp = departureId;
+                            setDepartureId(arrivalId);
+                            setArrivalId(temp);
+                          }}
+                        />
+                      </Col>
+
+                      <Col xs={24} md={6}>
+                        <Input
+                          size="large"
+                          prefix={<EnvironmentOutlined />}
+                          placeholder="To"
+                          value={arrivalId}
+                          onChange={(e) => setArrivalId(e.target.value.toUpperCase())}
+                          style={{ height: 54, borderRadius: 14 }}
+                        />
+                      </Col>
+
+                      <Col xs={24} md={5}>
+                        <DatePicker
+                          size="large"
+                          placeholder="Departure"
+                          style={{
+                            width: '100%',
+                            height: 54,
+                            borderRadius: 14,
+                          }}
+                          suffixIcon={<CalendarOutlined />}
+                          value={outboundDate ? dayjs(outboundDate) : null}
+                          onChange={(d) => setOutboundDate(d?.format('YYYY-MM-DD') || '')}
+                        />
+                      </Col>
+
+                      {tripType === 'round' && (
+                        <Col xs={24} md={5}>
+                          <DatePicker
+                            size="large"
+                            placeholder="Return"
+                            style={{
+                              width: '100%',
+                              height: 54,
+                              borderRadius: 14,
+                            }}
+                            suffixIcon={<CalendarOutlined />}
+                            value={returnDate ? dayjs(returnDate) : null}
+                            onChange={(d) => setReturnDate(d?.format('YYYY-MM-DD') || '')}
+                          />
+                        </Col>
+                      )}
+                    </Row>
+
+                    <div
+                      style={{
+                        marginTop: 28,
+                        display: 'flex',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Button
+                        type="primary"
+                        size="large"
+                        shape="round"
+                        icon={<SearchOutlined />}
+                        loading={loading}
+                        onClick={fetchFlights}
+                        style={{
+                          minWidth: 220,
+                          height: 52,
+                          fontWeight: 600,
+                          fontSize: 16,
+                        }}
+                      >
+                        Search Flights
+                      </Button>
+                    </div>
+                  </Card>
+                ) : (
+                  <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                    <Button
+                      danger
+                      onClick={() => {
+                        onFlightSelect?.(null);
+
+                        setSelectedDeparture(null);
+                        setSelectedReturn(null);
+
+                        setDepartureFlights([]);
+                        setReturnFlights([]);
+
+                        setStep('departure');
+                      }}
+                    >
+                      Change Itinerary
+                    </Button>
+                  </div>
+                )}
+
+                {allFlights.length > 0 && (
+                  <Card
+                    size="small"
+                    style={{
+                      marginBottom: 20,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Row gutter={24}>
+                      {/* Stops */}
+
+                      <Col xs={24} md={8}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: 8,
+                          }}
+                        >
+                          Stops
+                        </div>
+
+                        <Select
+                          mode="multiple"
+                          allowClear
+                          placeholder="All Stops"
+                          style={{ width: '100%' }}
+                          value={selectedStops}
+                          onChange={setSelectedStops}
+                          options={[
+                            {
+                              value: '0',
+                              label: 'Nonstop',
+                            },
+                            {
+                              value: '1',
+                              label: '1 Stop',
+                            },
+                            {
+                              value: '2',
+                              label: '2+ Stops',
+                            },
+                          ]}
+                        />
+                      </Col>
+
+                      {/* Airline */}
+
+                      <Col xs={24} md={16}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            marginBottom: 8,
+                          }}
+                        >
+                          Airlines
+                        </div>
+
+                        <Select
+                          mode="multiple"
+                          allowClear
+                          placeholder="All Airlines"
+                          style={{ width: '100%' }}
+                          value={selectedAirlines}
+                          onChange={setSelectedAirlines}
+                          options={airlines.map((airline) => ({
+                            value: airline,
+                            label: airline,
+                          }))}
+                        />
+                      </Col>
+                    </Row>
+                  </Card>
+                )}
+
+                {loading &&
+                  [...Array(3)].map((_, i) => (
+                    <Card key={i} style={{ marginBottom: 16, borderRadius: 12 }}>
+                      <Skeleton active avatar paragraph={{ rows: 3 }} />
+                    </Card>
+                  ))}
+
+                {step === 'return' && selectedDeparture && (
+                  <>
+                    <h2 style={{ marginBottom: 16 }}>Selected Departure Flight</h2>
+
+                    <FlightCard flight={selectedDeparture} selected showButton={false} />
+
+                    <h2 style={{ marginBottom: 16 }}>Select Return Flight</h2>
+                  </>
+                )}
+
+                {!loading &&
+                  (step === 'return' && selectedReturn ? [selectedReturn] : flights).map(
+                    (flight: any, index: number) => {
+                      const isSelected =
+                        selectedReturn?.flights?.[0]?.flight_number ===
+                          flight.flights?.[0]?.flight_number &&
+                        selectedReturn?.flights?.[0]?.departure_airport?.time ===
+                          flight.flights?.[0]?.departure_airport?.time;
+
+                      return (
+                        <FlightCard
+                          key={index}
+                          flight={flight}
+                          selected={isSelected}
+                          showButton={!isSelected}
+                          loading={loading}
+                          buttonText={
+                            isSelected
+                              ? 'Selected'
+                              : step === 'departure'
+                                ? 'Select Departure'
+                                : 'Select Return'
+                          }
+                          onClick={async () => {
+                            if (step === 'departure') {
+                              // One Way: save immediately
+                              if (tripType === 'oneway') {
+                                const itinerary = {
+                                  tripType,
+                                  departure: flight,
+                                  return: null,
+                                };
+
+                                setSelectedDeparture(flight);
+                                setSelectedReturn(null);
+
+                                onChange(null); // Clear uploaded image
+                                onFlightSelect?.(itinerary);
+
+                                message.success('Flight selected');
+                                return;
+                              }
+
+                              // Round Trip: continue to fetch return flights
+                              try {
+                                setLoading(true);
+
+                                setSelectedDeparture(flight);
+
+                                const params = new URLSearchParams({
+                                  departure_token: flight.departure_token,
+                                  departure_id: departureId,
+                                  arrival_id: arrivalId,
+                                  outbound_date: outboundDate,
+                                  return_date: returnDate,
+                                  flight_type: 'round_trip',
+                                  adults: adults.toString(),
+                                  children: children.toString(),
+                                  infants_on_lap: infants.toString(),
+                                  travel_class:
+                                    travelClass === 'first' ? 'first_class' : travelClass,
+                                  currency: 'USD',
+                                });
+
+                                const res = await fetch(`/api/flights/return?${params.toString()}`);
+
+                                const data = await res.json();
+
+                                if (!res.ok) {
+                                  throw new Error(data.error || 'Unable to load return flights');
+                                }
+
+                                setReturnFlights(data.best_flights || []);
+                                setStep('return');
+
+                                message.success('Select your return flight');
+                              } catch (err: any) {
+                                message.error(err.message);
+                              } finally {
+                                setLoading(false);
+                              }
+                            } else {
+                              const itinerary = {
+                                tripType,
+                                departure: selectedDeparture,
+                                return: flight,
+                              };
+
+                              setSelectedReturn(flight);
+
+                              onChange(null);
+                              onFlightSelect?.(itinerary);
+
+                              message.success('Round-trip itinerary selected');
+                            }
+                          }}
+                        />
+                      );
+                    }
+                  )}
+              </>
+            ),
+          },
+        ]}
+      />
 
       <style jsx>{`
         :global(.ant-upload) {

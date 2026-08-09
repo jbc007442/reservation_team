@@ -29,7 +29,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    verifyToken(token);
+    const decoded = verifyToken(token) as {
+      id: string;
+      role: string;
+      email: string;
+      name: string;
+    };
 
     const body = await req.json();
 
@@ -110,6 +115,16 @@ export async function POST(req: NextRequest) {
       status: 'sent',
       provider: 'Nodemailer',
       sentAt: new Date(),
+    });
+
+    /* ---------------- Timeline ---------------- */
+
+    authForm.timeline.push({
+      action: 'Authorization Form Created',
+      description: 'Authorization form created by staff.',
+      performedBy: decoded.id,
+      source: 'staff',
+      createdAt: new Date(),
     });
 
     await authForm.save();

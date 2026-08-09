@@ -1,8 +1,6 @@
 'use client';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
-
-import airports from '@/lib/airports';
 import { useAuthStore } from '@/store/authStore';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import {
@@ -38,6 +36,24 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
   const { message } = App.useApp();
   const [passengerTypeLocked, setPassengerTypeLocked] = useState(false);
   const isEdit = !!booking;
+  const [airportOptions, setAirportOptions] = useState<{ value: string; label: string }[]>([]);
+
+  const searchAirports = async (value: string) => {
+    if (!value) {
+      setAirportOptions([]);
+      return;
+    }
+
+    const res = await fetch(`/api/airport?q=${encodeURIComponent(value)}`);
+    const data = await res.json();
+
+    setAirportOptions(
+      data.map((airport: any) => ({
+        value: airport.iata,
+        label: `${airport.city} (${airport.iata}) - ${airport.name}`,
+      }))
+    );
+  };
 
   const checkExistingCustomer = async (mobile: string) => {
     if (!mobile) return;
@@ -314,17 +330,14 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
               rules={[{ required: true, message: 'Please select departure airport' }]}
             >
               <Select
-                showSearch
                 size="large"
                 placeholder="Select Departure Airport"
-                optionFilterProp="label"
-                filterOption={(input, option) =>
-                  (option?.label as string).toLowerCase().includes(input.toLowerCase())
-                }
-                options={airports.map((airport: any) => ({
-                  value: airport.iata,
-                  label: `${airport.city} (${airport.iata}) - ${airport.name}`,
-                }))}
+                showSearch={{
+                  filterOption: false,
+                  onSearch: searchAirports,
+                }}
+                options={airportOptions}
+                notFoundContent="Type at least 2 characters..."
               />
             </Form.Item>
           </Col>
@@ -336,17 +349,14 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
               rules={[{ required: true, message: 'Please select destination airport' }]}
             >
               <Select
-                showSearch
                 size="large"
                 placeholder="Select Destination Airport"
-                optionFilterProp="label"
-                filterOption={(input, option) =>
-                  (option?.label as string).toLowerCase().includes(input.toLowerCase())
-                }
-                options={airports.map((airport: any) => ({
-                  value: airport.iata,
-                  label: `${airport.city} (${airport.iata}) - ${airport.name}`,
-                }))}
+                showSearch={{
+                  filterOption: false,
+                  onSearch: searchAirports,
+                }}
+                options={airportOptions}
+                notFoundContent="Type at least 2 characters..."
               />
             </Form.Item>
           </Col>

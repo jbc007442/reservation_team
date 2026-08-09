@@ -15,7 +15,7 @@ import CardInformation, { CardInfo } from './CardInformation';
 import TermsConditions from './TermsConditions';
 import { Passenger } from './types';
 import { termsTemplates } from './constants';
-import { Booking } from '@/components/user/booking/types';
+import { Booking } from '@/components/admin/booking/types';
 
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -35,9 +35,11 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const [terms, setTerms] = useState<string>(termsTemplates.Flight);
   const [charges, setCharges] = useState<ChargeItem[]>([]);
   const [cards, setCards] = useState<CardInfo[]>([]);
+  const [taxesAndFee, setTaxesAndFee] = useState<number | null>(null);
 
   const [paymentLocked, setPaymentLocked] = useState(false);
-  const totalAmount = charges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const chargesTotal = charges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const totalAmount = chargesTotal + (Number(taxesAndFee) || 0);
   const [loading, setLoading] = useState(false);
   const [authFormId, setAuthFormId] = useState<string | null>(null);
   const customerName = booking.customer.name.trim().split(' ');
@@ -141,6 +143,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         setTerms(result.data.terms || '');
         setCharges(result.data.charges || []);
+        setTaxesAndFee(result.data.taxesAndFee ?? null);
 
         const loadedCards = (result.data.cards || []).map((card: any) => ({
           ...card,
@@ -149,12 +152,14 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         setCards(loadedCards);
 
-        // Lock AuthForm if ALL cards have Transaction ID
-        const allTransactionIdsFilled =
-          loadedCards.length > 0 &&
-          loadedCards.every((card: any) => card.transactionId && card.transactionId.trim() !== '');
+        // Lock AuthForm only when ALL charges are Approved
+        const loadedCharges = result.data.charges || [];
 
-        setPaymentLocked(allTransactionIdsFilled);
+        const allPaymentsApproved =
+          loadedCharges.length > 0 &&
+          loadedCharges.every((charge: any) => charge.paymentStatus === 'Approved');
+
+        setPaymentLocked(allPaymentsApproved);
 
         const loadedPassengers = (result.data.passengers || []).map((p: any) => ({
           title: p.title,
@@ -196,6 +201,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
         setContent('');
         setTerms(termsTemplates.Flight);
         setCharges([]);
+        setTaxesAndFee(null);
         setCards([]);
         setPaymentLocked(false);
         console.log('New Auth Form - Creating default passenger');
@@ -344,6 +350,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
         itineraryData,
 
         charges,
+        taxesAndFee: Number(taxesAndFee) || 0,
 
         cards: cards.map((card) => ({
           ...card,
@@ -438,7 +445,12 @@ export default function AuthForm({ booking }: AuthFormProps) {
           </div>
         </Card>
 
-        <Charges value={charges} onChange={setCharges} />
+        <Charges
+          value={charges}
+          onChange={setCharges}
+          taxesAndFee={taxesAndFee}
+          onTaxesAndFeeChange={setTaxesAndFee}
+        />
 
         <CardInformation value={cards} onChange={setCards} totalAmount={totalAmount} />
 
