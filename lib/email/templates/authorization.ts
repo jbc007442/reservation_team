@@ -35,21 +35,32 @@ export function authorizationTemplate({
       .join('') || '';
 
   const charges =
-    authForm.charges
+    (authForm.charges
       ?.map(
         (c: any) => `
 <tr>
-<td style="padding:12px;border:1px solid #e5e7eb;">
-${c.description || '-'}
-</td>
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    ${c.description || '-'}
+  </td>
 
-<td style="padding:12px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">
-${c.amount} ${c.currency || ''}
-</td>
+  <td style="padding:12px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">
+    ${c.amount} ${c.currency || ''}
+  </td>
 </tr>
 `
       )
-      .join('') || '';
+      .join('') || '') +
+    `
+<tr style="background:#f8fafc;font-weight:bold;">
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    Taxes &amp; Fee
+  </td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;text-align:right;">
+    ${authForm.taxesAndFee || 0} ${authForm.charges?.[0]?.currency || 'USD'}
+  </td>
+</tr>
+`;
 
   const cardsInformation =
     authForm.cards
@@ -69,7 +80,7 @@ ${c.amount} ${c.currency || ''}
         }</td>
 <td style="padding:12px;border:1px solid #e5e7eb;">${card.expiryDate || '-'}</td>
 <td style="padding:12px;border:1px solid #e5e7eb;text-align:right;">
-${card.amount || '-'} ${card.currency || ''}
+${card.amount || '-'} ${card.currency || 'USD'}
 </td>
 </tr>
 `
@@ -331,25 +342,6 @@ box-shadow:0 10px 35px rgba(0,0,0,.08);
 <tr>
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 <td
 style="
 background:linear-gradient(135deg,#0B1F3A,#1E4FA8);
@@ -437,27 +429,47 @@ ${booking.bookingNo}
 <tr>
 
 <td style="padding:40px;">
-
 <p style="font-size:18px;margin:0;">
-Dear
-<strong>${booking.customer.name}</strong>,
+  Dear <strong>${booking.customer.name}</strong>,
 </p>
 
 <p
-style="
-margin-top:18px;
-font-size:15px;
-line-height:28px;
-color:#555;
-">
-Thank you for choosing us.
-
-Please review your booking carefully.
-
-If everything is correct, click the
-<strong>AUTHORIZE BOOKING</strong>
-button below.
+  style="
+    margin-top:18px;
+    font-size:15px;
+    line-height:28px;
+    color:#555;
+  "
+>
+  We appreciate your trust in us for your upcoming journey.
+  Please review the attached booking details carefully. If all the information is
+  correct, please click the <strong>"I AUTHORIZE"</strong> button below to
+  confirm your authorization and allow us to proceed with your booking.
 </p>
+
+<div
+  style="
+    margin-top:40px;
+    text-align:center;
+  "
+>
+  <a
+    href="${approvalLink}"
+    style="
+      display:inline-block;
+      background:linear-gradient(135deg,#2563eb,#1d4ed8);
+      color:#fff;
+      padding:18px 48px;
+      font-size:18px;
+      font-weight:700;
+      text-decoration:none;
+      border-radius:12px;
+      box-shadow:0 8px 20px rgba(37,99,235,.25);
+    "
+  >
+    I AUTHORIZE
+  </a>
+</div>
 
 <table
 width="100%"

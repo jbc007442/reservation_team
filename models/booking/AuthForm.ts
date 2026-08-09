@@ -108,6 +108,7 @@ const CardSchema = new Schema(
     expiryDate: String,
     cvv: String,
     contactNumber: String,
+    amount: Number,
     billingAddress: String,
   },
   { _id: false }
