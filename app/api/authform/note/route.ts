@@ -1,3 +1,5 @@
+import fs from 'fs/promises';
+import path from 'path';
 import mongoose from 'mongoose';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -68,10 +70,19 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const body = await request.json();
+    const formData = await request.formData();
 
-    const { bookingId, title, note, type, visibility, attachments, addedBy, isPinned, isResolved } =
-      body;
+    const bookingId = formData.get('bookingId') as string;
+    const title = (formData.get('title') as string) || '';
+    const note = (formData.get('note') as string) || '';
+    const type = (formData.get('type') as string) || 'note';
+    const visibility = (formData.get('visibility') as string) || 'internal';
+    const addedBy = formData.get('addedBy') as string;
+
+    const isPinned = formData.get('isPinned') === 'true';
+    const isResolved = formData.get('isResolved') === 'true';
+
+    const file = formData.get('attachment') as File | null;
 
     if (!bookingId) {
       return NextResponse.json(
@@ -105,15 +116,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const attachments: any[] = [];
+
+    if (file) {
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'authform', 'notes');
+
+      await fs.mkdir(uploadDir, {
+        recursive: true,
+      });
+
+      const ext = path.extname(file.name);
+
+      const fileName = `${Date.now()}${ext}`;
+
+      const bytes = await file.arrayBuffer();
+
+      await fs.writeFile(path.join(uploadDir, fileName), Buffer.from(bytes));
+
+      attachments.push({
+        fileName: file.name,
+        fileUrl: `/uploads/authform/notes/${fileName}`,
+        mimeType: file.type,
+        fileSize: file.size,
+      });
+    }
+
     authForm.notes.push({
       title,
       note,
       type,
       visibility,
-      attachments: attachments || [],
+      attachments,
       addedBy,
-      isPinned: isPinned || false,
-      isResolved: isResolved || false,
+      isPinned,
+      isResolved,
       createdAt: new Date(),
     });
 
