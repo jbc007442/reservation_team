@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -18,31 +17,32 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      fetchBooking();
-    }
-  }, [id]);
+    if (!id) return;
 
-  const fetchBooking = async () => {
-    try {
-      const res = await fetch(`/api/booking/${id}`);
-      const result = await res.json();
+    const fetchBooking = async () => {
+      try {
+        const res = await fetch(`/api/booking/${id}`);
+        const result = await res.json();
 
-      if (!res.ok) {
-        throw new Error(result.message);
+        if (!res.ok) {
+          throw new Error(result.message);
+        }
+
+        setBooking(result.data);
+      } catch (err) {
+        const error = err as Error;
+        message.error(error.message);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setBooking(result.data);
-    } catch (err: any) {
-      message.error(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    fetchBooking();
+  }, [id]);
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center">
+      <div className="flex h-[400px] items-center justify-center">
         <Spin size="large" />
       </div>
     );
@@ -53,20 +53,18 @@ export default function Page() {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="mx-auto max-w-[1600px]">
-        <Header booking={booking} />
+    <div className="space-y-6">
+      <Header booking={booking} />
 
-        <Row gutter={[24, 24]}>
-          <Col xs={24} lg={7} xl={6}>
-            <AuthSidebar booking={booking} />
-          </Col>
+      <Row gutter={[24, 24]}>
+        <Col xs={24} lg={7} xl={6}>
+          <AuthSidebar booking={booking} />
+        </Col>
 
-          <Col xs={24} lg={17} xl={18}>
-            <AuthTabs booking={booking} />
-          </Col>
-        </Row>
-      </div>
+        <Col xs={24} lg={17} xl={18}>
+          <AuthTabs booking={booking} />
+        </Col>
+      </Row>
     </div>
   );
 }

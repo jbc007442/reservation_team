@@ -9,6 +9,7 @@ const { TextArea } = Input;
 
 export interface CardInfo {
   cardType: string;
+  paymentLink: string;
   cardHolderName: string;
   cardNumber: string;
   cvv: string;
@@ -26,6 +27,7 @@ interface CardInformationProps {
 
 const defaultCard: CardInfo = {
   cardType: 'visa',
+  paymentLink: '',
   cardHolderName: '',
   cardNumber: '',
   cvv: '',
@@ -56,7 +58,6 @@ export default function CardInformation({ value, onChange, totalAmount }: CardIn
     }
   }, [totalAmount]);
 
-
   const addCard = () => {
     onChange([
       ...cards,
@@ -81,6 +82,29 @@ export default function CardInformation({ value, onChange, totalAmount }: CardIn
         : card
     );
 
+    // Handle Card Type change
+    if (field === 'cardType') {
+      if (value === 'other') {
+        updatedCards[index] = {
+          ...updatedCards[index],
+          cardType: 'other',
+          paymentLink: '',
+          cardHolderName: '',
+          cardNumber: '',
+          cvv: '',
+          expiryDate: null,
+          billingAddress: '',
+        };
+      } else {
+        updatedCards[index] = {
+          ...updatedCards[index],
+          cardType: String(value),
+          paymentLink: '',
+        };
+      }
+    }
+
+    // Handle Amount change
     if (field === 'amount') {
       const enteredAmount = Number(value) || 0;
 
@@ -89,10 +113,10 @@ export default function CardInformation({ value, onChange, totalAmount }: CardIn
         return;
       }
 
-      // Only when there are multiple cards
       if (updatedCards.length > 1) {
         const otherTotal = updatedCards.reduce((sum, card, i) => {
-          if (i === 0) return sum; // skip first card
+          if (i === 0) return sum;
+
           return sum + (Number(card.amount) || 0);
         }, 0);
 
@@ -139,49 +163,61 @@ export default function CardInformation({ value, onChange, totalAmount }: CardIn
             </Radio.Group>
           </Form.Item>
 
-          <Form.Item label="Card Holder Name">
-            <Input
-              placeholder="Card Holder Name"
-              value={card.cardHolderName}
-              onChange={(e) => updateCard(index, 'cardHolderName', e.target.value)}
-            />
-          </Form.Item>
-
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item label="Card Number">
+          {card.cardType === 'other' ? (
+            <Form.Item label="Payment Link">
+              <Input
+                placeholder="https://payment-link.com"
+                value={card.paymentLink}
+                onChange={(e) => updateCard(index, 'paymentLink', e.target.value)}
+              />
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item label="Card Holder Name">
                 <Input
-                  placeholder="Card Number"
-                  value={card.cardNumber}
-                  onChange={(e) => updateCard(index, 'cardNumber', e.target.value)}
+                  placeholder="Card Holder Name"
+                  value={card.cardHolderName}
+                  onChange={(e) => updateCard(index, 'cardHolderName', e.target.value)}
                 />
               </Form.Item>
-            </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item label="CVV Number">
-                <Input
-                  placeholder="CVV"
-                  maxLength={4}
-                  value={card.cvv}
-                  onChange={(e) => updateCard(index, 'cvv', e.target.value)}
-                />
-              </Form.Item>
-            </Col>
+              <Row gutter={16}>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Card Number">
+                    <Input
+                      placeholder="Card Number"
+                      value={card.cardNumber}
+                      onChange={(e) => updateCard(index, 'cardNumber', e.target.value)}
+                    />
+                  </Form.Item>
+                </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item label="Expiration Date">
-                <DatePicker
-                  picker="month"
-                  className="w-full"
-                  format="MM/YYYY"
-                  placeholder="MM/YYYY"
-                  value={card.expiryDate}
-                  onChange={(date) => updateCard(index, 'expiryDate', date)}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
+                <Col xs={24} md={8}>
+                  <Form.Item label="CVV Number">
+                    <Input
+                      placeholder="CVV"
+                      maxLength={4}
+                      value={card.cvv}
+                      onChange={(e) => updateCard(index, 'cvv', e.target.value)}
+                    />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} md={8}>
+                  <Form.Item label="Expiration Date">
+                    <DatePicker
+                      picker="month"
+                      className="w-full"
+                      format="MM/YYYY"
+                      placeholder="MM/YYYY"
+                      value={card.expiryDate}
+                      onChange={(date) => updateCard(index, 'expiryDate', date)}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          )}
 
           <Row gutter={16}>
             <Col xs={24} md={12}>
@@ -209,14 +245,16 @@ export default function CardInformation({ value, onChange, totalAmount }: CardIn
             </Col>
           </Row>
 
-          <Form.Item label="Billing Address">
-            <TextArea
-              rows={4}
-              placeholder="Billing Address"
-              value={card.billingAddress}
-              onChange={(e) => updateCard(index, 'billingAddress', e.target.value)}
-            />
-          </Form.Item>
+          {card.cardType !== 'other' && (
+            <Form.Item label="Billing Address">
+              <TextArea
+                rows={4}
+                placeholder="Billing Address"
+                value={card.billingAddress}
+                onChange={(e) => updateCard(index, 'billingAddress', e.target.value)}
+              />
+            </Form.Item>
+          )}
         </Card>
       ))}
 

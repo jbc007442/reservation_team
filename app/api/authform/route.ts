@@ -153,19 +153,43 @@ export async function POST(req: NextRequest) {
 }
 
 /* ---------------- GET : All Auth Forms ---------------- */
-
 export async function GET() {
   try {
     await connectDB();
 
-    const authForms = await AuthForm.find()
+    const cookieStore = await cookies();
+    const token = cookieStore.get('token')?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Unauthorized',
+        },
+        { status: 401 }
+      );
+    }
+
+    const decoded = verifyToken(token) as {
+      id: string;
+      role: string;
+      email: string;
+      name: string;
+    };
+
+    const filter =
+      decoded.role === 'admin'
+        ? {}
+        : {
+            createdBy: decoded.id,
+          };
+
+    const authForms = await AuthForm.find(filter)
       .populate({
         path: 'bookingId',
         select: 'bookingNo customer',
       })
-      .select(
-        'bookingId email bookingType serviceType approval createdAt updatedAt'
-      )
+      .select('bookingId email bookingType serviceType approval createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -189,5 +213,4 @@ export async function GET() {
     );
   }
 }
-
 

@@ -24,31 +24,90 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const payload = user as any;
+    const payload = user as {
+      id: string;
+      role: 'admin' | 'employee';
+    };
 
     // --------------------------------
-    // Get bookings according to role
+    // Get Bookings
     // --------------------------------
 
-    let bookingIds;
+    const bookings =
+      payload.role === 'admin'
+        ? await Booking.find({}).select('_id status').lean()
+        : await Booking.find({
+            createdBy: payload.id,
+          })
+            .select('_id status')
+            .lean();
 
-    if (payload.role === 'admin') {
-      bookingIds = await Booking.find({}).select('_id').lean();
-    } else {
-      bookingIds = await Booking.find({
-        createdBy: payload._id,
-      })
-        .select('_id')
-        .lean();
+    const bookingIdList = bookings.map((booking: any) => booking._id);
+
+    // --------------------------------
+    // Booking Status Statistics
+    // --------------------------------
+
+    const stats = {
+      total: bookings.length,
+      bookingCreated: 0,
+      authPending: 0,
+      authCompleted: 0,
+      ticketed: 0,
+      cancelled: 0,
+      refunded: 0,
+      chargeBack: 0,
+      followUp: 0,
+      cardCharged: 0,
+      cardDecline: 0,
+    };
+
+    for (const booking of bookings as any[]) {
+      switch (booking.status) {
+        case 'booking_created':
+          stats.bookingCreated++;
+          break;
+
+        case 'auth_pending':
+          stats.authPending++;
+          break;
+
+        case 'auth_completed':
+          stats.authCompleted++;
+          break;
+
+        case 'ticketed':
+          stats.ticketed++;
+          break;
+
+        case 'cancelled':
+          stats.cancelled++;
+          break;
+
+        case 'refunded':
+          stats.refunded++;
+          break;
+
+        case 'charge_back':
+          stats.chargeBack++;
+          break;
+
+        case 'follow_up':
+          stats.followUp++;
+          break;
+
+        case 'card_charged':
+          stats.cardCharged++;
+          break;
+
+        case 'card_decline':
+          stats.cardDecline++;
+          break;
+
+        default:
+          break;
+      }
     }
-
-    const bookingIdList = bookingIds.map((booking) => booking._id);
-
-    // --------------------------------
-    // Total Bookings
-    // --------------------------------
-
-    const totalBookings = bookingIdList.length;
 
     // --------------------------------
     // Revenue
@@ -62,7 +121,6 @@ export async function GET(req: NextRequest) {
           },
         },
       },
-
       {
         $project: {
           chargesTotal: {
@@ -78,21 +136,17 @@ export async function GET(req: NextRequest) {
               },
             },
           },
-
           taxesAndFee: {
             $ifNull: ['$taxesAndFee', 0],
           },
         },
       },
-
       {
         $group: {
           _id: null,
-
           totalCharges: {
             $sum: '$chargesTotal',
           },
-
           totalTaxesAndFee: {
             $sum: '$taxesAndFee',
           },
@@ -105,18 +159,10 @@ export async function GET(req: NextRequest) {
       totalTaxesAndFee: 0,
     };
 
-    // --------------------------------
-    // Revenue calculations
-    // --------------------------------
-
     const totalCharges = Number(revenue.totalCharges || 0);
-
     const totalTaxesAndFee = Number(revenue.totalTaxesAndFee || 0);
 
-    // Gross = Charges + Taxes & Fee
     const netGross = totalCharges + totalTaxesAndFee;
-
-    // Profit = Taxes & Fee
     const netProfit = totalTaxesAndFee;
 
     // --------------------------------
@@ -125,9 +171,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-
       data: {
-        totalBookings,
+        ...stats,
 
         revenue: {
           totalCharges,

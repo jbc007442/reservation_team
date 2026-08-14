@@ -7,7 +7,6 @@ import { connectDB } from '@/lib/mongodb';
 import Booking from '@/models/booking/Booking';
 import Counter from '@/models/booking/Counter';
 
-
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -125,71 +124,9 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    const stats = {
-      total: bookings.length,
-      bookingCreated: 0,
-      authPending: 0,
-      authCompleted: 0,
-      ticketed: 0,
-      cancelled: 0,
-      refunded: 0,
-      chargeBack: 0,
-      followUp: 0,
-      cardCharged: 0,
-      cardDecline: 0,
-    };
-
-    for (const booking of bookings) {
-      switch (booking.status) {
-        case 'booking_created':
-          stats.bookingCreated++;
-          break;
-
-        case 'auth_pending':
-          stats.authPending++;
-          break;
-
-        case 'auth_completed':
-          stats.authCompleted++;
-          break;
-
-        case 'ticketed':
-          stats.ticketed++;
-          break;
-
-        case 'cancelled':
-          stats.cancelled++;
-          break;
-
-        case 'refunded':
-          stats.refunded++;
-          break;
-
-        case 'charge_back':
-          stats.chargeBack++;
-          break;
-
-        case 'follow_up':
-          stats.followUp++;
-          break;
-
-        case 'card_charged':
-          stats.cardCharged++;
-          break;
-
-        case 'card_decline':
-          stats.cardDecline++;
-          break;
-
-        default:
-          break;
-      }
-    }
-
     return NextResponse.json({
       success: true,
       data: bookings,
-      stats,
     });
   } catch (error) {
     console.error('GET /api/booking error:', error);

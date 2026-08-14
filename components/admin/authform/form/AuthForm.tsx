@@ -315,8 +315,6 @@ export default function AuthForm({ booking }: AuthFormProps) {
         }
       }
 
-      console.log('Booking Image:', bookingImage);
-      console.log('Selected Flight:', selectedFlight);
       const payload = {
         bookingId: booking._id,
         bookingNo: booking.bookingNo,
@@ -350,20 +348,29 @@ export default function AuthForm({ booking }: AuthFormProps) {
         itineraryData,
 
         charges,
-        taxesAndFee: Number(taxesAndFee) || 0,
 
-        cards: cards.map((card) => ({
-          ...card,
-          expiryDate: card.expiryDate ? card.expiryDate.format('MM/YYYY') : '',
-        })),
+        cards: cards.map((card) => {
+          if (card.cardType === 'other') {
+            return {
+              cardType: 'other',
+              paymentLink: card.paymentLink,
+              contactNumber: card.contactNumber,
+              amount: card.amount,
+            };
+          }
+
+          return {
+            cardType: card.cardType,
+            cardHolderName: card.cardHolderName,
+            cardNumber: card.cardNumber,
+            cvv: card.cvv,
+            expiryDate: card.expiryDate ? card.expiryDate.format('MM/YYYY') : '',
+            contactNumber: card.contactNumber,
+            amount: card.amount,
+            billingAddress: card.billingAddress,
+          };
+        }),
       };
-      console.log('Payload:', payload);
-      console.log('Payload Passengers:', payload.passengers);
-
-      console.log('Selected Flight', selectedFlight);
-      console.log('Payload', payload);
-      console.log('Passengers State:', passengers);
-      console.log('Payload Passengers:', payload.passengers);
 
       const url = authFormId ? `/api/authform/${authFormId}` : '/api/authform';
 
@@ -445,12 +452,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
           </div>
         </Card>
 
-        <Charges
-          value={charges}
-          onChange={setCharges}
-          taxesAndFee={taxesAndFee}
-          onTaxesAndFeeChange={setTaxesAndFee}
-        />
+        <Charges value={charges} onChange={setCharges} />
 
         <CardInformation value={cards} onChange={setCards} totalAmount={totalAmount} />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Card, Col, Input, InputNumber, Row, Select, Typography, Space } from 'antd';
+import { Button, Card, Col, Input, InputNumber, Row, Select, Typography } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -14,17 +14,9 @@ export interface ChargeItem {
 interface ChargesProps {
   value: ChargeItem[];
   onChange: (items: ChargeItem[]) => void;
-
-  taxesAndFee: number | null;
-  onTaxesAndFeeChange: (value: number | null) => void;
 }
 
-export default function Charges({
-  value,
-  onChange,
-  taxesAndFee,
-  onTaxesAndFeeChange,
-}: ChargesProps) {
+export default function Charges({ value, onChange }: ChargesProps) {
   const items =
     value.length > 0
       ? value
@@ -68,8 +60,7 @@ export default function Charges({
     onChange(updatedItems);
   };
 
-  const chargesTotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const finalTotal = chargesTotal + (Number(taxesAndFee) || 0);
+  const finalTotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const currency = items[0]?.currency || 'USD';
 
   return (
@@ -128,8 +119,8 @@ export default function Charges({
                   value: 'USD',
                 },
                 {
-                  label: 'INR',
-                  value: 'INR',
+                  label: 'CAD',
+                  value: 'CAD',
                 },
                 {
                   label: 'AED',
@@ -156,42 +147,6 @@ export default function Charges({
       <Button type="dashed" icon={<PlusOutlined />} onClick={addItem}>
         Add Charge
       </Button>
-
-      {/* Taxes & Fee - ONE TIME ONLY */}
-
-      <div className="mt-4 rounded-lg border bg-gray-50 p-4">
-        <Row justify="space-between" align="middle" gutter={16}>
-          <Col>
-            <Text strong>Taxes & Fee</Text>
-          </Col>
-
-          <Col>
-            <Space.Compact>
-              <InputNumber
-                min={0}
-                precision={2}
-                placeholder="0.00"
-                value={taxesAndFee}
-                onChange={onTaxesAndFeeChange}
-                style={{ width: '100%' }}
-              />
-              <Typography.Text
-                style={{
-                  padding: '5px 12px',
-                  border: '1px solid #d9d9d9',
-                  borderLeft: 0,
-                  background: '#fafafa',
-                  borderRadius: '0 6px 6px 0',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                {currency}
-              </Typography.Text>
-            </Space.Compact>
-          </Col>
-        </Row>
-      </div>
 
       {/* Total */}
 

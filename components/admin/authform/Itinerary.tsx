@@ -75,7 +75,7 @@ export default function Itinerary({ booking }: { booking: Booking }) {
                 </Descriptions>
 
                 <Table
-                  rowKey={(_, index) => String(index)}
+                  rowKey="_id"
                   columns={passengerColumns}
                   dataSource={data.passengers || []}
                   pagination={false}

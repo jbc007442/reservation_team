@@ -3,10 +3,7 @@ interface AuthorizationEmailProps {
   approvalLink: string;
 }
 
-export function authorizationTemplate({
-  authForm,
-  approvalLink,
-}: AuthorizationEmailProps) {
+export function authorizationTemplate({ authForm, approvalLink }: AuthorizationEmailProps) {
   const booking = authForm.bookingId;
 
   const formatDate = (date: any) => {
@@ -62,35 +59,74 @@ export function authorizationTemplate({
 </tr>
 `;
 
+  const hasPaymentLink = authForm.cards?.some((card: any) => card.cardType === 'other');
+
   const cardsInformation =
     authForm.cards
-      ?.map(
-        (card: any) => `
+      ?.map((card: any) => {
+        if (card.cardType === 'other') {
+          return `
 <tr>
-<td style="padding:12px;border:1px solid #e5e7eb;">${card.cardType || '-'}</td>
-<td style="padding:12px;border:1px solid #e5e7eb;">${card.cardHolderName || '-'}</td>
-<td style="padding:12px;border:1px solid #e5e7eb;">${
-          card.cardNumber
-            ? card.cardNumber
-                .replace(/\s/g, '')
-                .replace(/\d(?=\d{4})/g, '*')
-                .replace(/(.{4})/g, '$1 ')
-                .trim()
-            : '-'
-        }</td>
-<td style="padding:12px;border:1px solid #e5e7eb;">${card.expiryDate || '-'}</td>
-<td style="padding:12px;border:1px solid #e5e7eb;text-align:right;">
-${card.amount || '-'} ${card.currency || 'USD'}
-</td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    Other
+  </td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    <a
+      href="${card.paymentLink || '#'}"
+      target="_blank"
+      style="color:#2563eb;text-decoration:underline;word-break:break-all;"
+    >
+      ${card.paymentLink || '-'}
+    </a>
+  </td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;text-align:right;">
+    ${card.amount || '-'} ${card.currency || 'USD'}
+  </td>
+
 </tr>
-`
-      )
+`;
+        }
+
+        return `
+<tr>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    ${card.cardType || '-'}
+  </td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    ${card.cardHolderName || '-'}
+  </td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    ${
+      card.cardNumber
+        ? card.cardNumber
+            .replace(/\s/g, '')
+            .replace(/\d(?=\d{4})/g, '*')
+            .replace(/(.{4})/g, '$1 ')
+            .trim()
+        : '-'
+    }
+  </td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;">
+    ${card.expiryDate || '-'}
+  </td>
+
+  <td style="padding:12px;border:1px solid #e5e7eb;text-align:right;">
+    ${card.amount || '-'} ${card.currency || 'USD'}
+  </td>
+
+</tr>
+`;
+      })
       .join('') || '';
 
-  const renderFlightCard = (
-    sectionTitle: string,
-    itinerary: any
-  ) => {
+  const renderFlightCard = (sectionTitle: string, itinerary: any) => {
     if (!itinerary?.flights?.length) return '';
 
     return `
@@ -441,10 +477,7 @@ ${booking.bookingNo}
     color:#555;
   "
 >
-  We appreciate your trust in us for your upcoming journey.
-  Please review the attached booking details carefully. If all the information is
-  correct, please click the <strong>"I AUTHORIZE"</strong> button below to
-  confirm your authorization and allow us to proceed with your booking.
+  ${authForm.content || ''}
 </p>
 
 <div
@@ -733,15 +766,25 @@ border-radius:12px;
 overflow:hidden;
 ">
 
+${
+  hasPaymentLink
+    ? `
 <tr style="background:#2563eb;color:#fff;text-align:left;">
-
-<th style="padding:14px;">Card</th>
-<th style="padding:14px;">Holder</th>
-<th style="padding:14px;">Number</th>
-<th style="padding:14px;">Expiry</th>
-<th style="padding:14px;">Amount</th>
-
+  <th style="padding:14px;">Card</th>
+  <th style="padding:14px;">Payment Link</th>
+  <th style="padding:14px;">Amount</th>
 </tr>
+`
+    : `
+<tr style="background:#2563eb;color:#fff;text-align:left;">
+  <th style="padding:14px;">Card</th>
+  <th style="padding:14px;">Holder</th>
+  <th style="padding:14px;">Number</th>
+  <th style="padding:14px;">Expiry</th>
+  <th style="padding:14px;">Amount</th>
+</tr>
+`
+}
 
 ${cardsInformation}
 
@@ -897,4 +940,3 @@ please contact our support team.
 </html>
 `;
 }
-

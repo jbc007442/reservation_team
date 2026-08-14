@@ -103,6 +103,13 @@ const ChargeSchema = new Schema(
 const CardSchema = new Schema(
   {
     cardType: String,
+
+    paymentLink: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+
     cardHolderName: String,
     cardNumber: String,
     expiryDate: String,
@@ -292,8 +299,6 @@ export interface IAuthForm extends Document {
 
   charges: unknown[];
 
-  taxesAndFee: number;
-
   cards: unknown[];
 
   billing: {
@@ -409,11 +414,6 @@ const AuthFormSchema = new Schema<IAuthForm>(
     },
 
     charges: [ChargeSchema],
-
-    taxesAndFee: {
-      type: Number,
-      default: 0,
-    },
 
     cards: [CardSchema],
 

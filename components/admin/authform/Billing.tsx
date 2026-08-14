@@ -12,6 +12,7 @@ import {
   Typography,
   Descriptions,
   message,
+  Segmented,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -39,6 +40,8 @@ interface PaymentItem {
 interface CardItem {
   key: string;
   cardType: string;
+  paymentLink?: string;
+
   cardHolderName: string;
   cardNumber: string;
   expiryDate: string;
@@ -63,6 +66,10 @@ export default function Billing({ booking }: BillingProps) {
     bookingReferenceNo: '',
     customer: '',
   });
+
+  const [currentStatus, setCurrentStatus] = useState<string>(booking.status || '');
+
+  const hasPaymentLink = cards.some((card) => card.cardType === 'other');
 
   useEffect(() => {
     loadPayments();
@@ -109,6 +116,7 @@ export default function Billing({ booking }: BillingProps) {
       const cardRows: CardItem[] = (result.data.cards || []).map((card: any, index: number) => ({
         key: String(index),
         cardType: card.cardType || '',
+        paymentLink: card.paymentLink || '',
         cardHolderName: card.cardHolderName || '',
         cardNumber: card.cardNumber || '',
         expiryDate: card.expiryDate || '',
@@ -123,6 +131,30 @@ export default function Billing({ booking }: BillingProps) {
       message.error('Failed to load payment details.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateBookingStatus = async (status: string) => {
+    try {
+      const res = await fetch(`/api/authform/booking/status/${booking._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message);
+      }
+
+      setCurrentStatus(status);
+
+      message.success('Booking status updated.');
+    } catch (err: any) {
+      message.error(err.message);
     }
   };
 
@@ -280,34 +312,83 @@ export default function Billing({ booking }: BillingProps) {
 
       <Table rowKey="key" pagination={false} columns={columns} dataSource={payments} />
 
-      <Divider>Card Information</Divider>
+      <Divider>Booking Status</Divider>
+
+      <Segmented
+        block
+        value={currentStatus}
+        onChange={(value) => updateBookingStatus(value as string)}
+        options={[
+          {
+            label: 'Cancelled',
+            value: 'cancelled',
+          },
+          {
+            label: 'Refunded',
+            value: 'refunded',
+          },
+          {
+            label: 'Charge Back',
+            value: 'charge_back',
+          },
+          {
+            label: 'Card Declined',
+            value: 'card_decline',
+          },
+        ]}
+      />
+
+      <Divider>Card/Payment Information</Divider>
 
       <Table
         rowKey="key"
         pagination={false}
         dataSource={cards}
-        columns={[
-          {
-            title: 'Card Type',
-            dataIndex: 'cardType',
-          },
-          {
-            title: 'Card Holder',
-            dataIndex: 'cardHolderName',
-          },
-          {
-            title: 'Card Number',
-            dataIndex: 'cardNumber',
-          },
-          {
-            title: 'CVV',
-            dataIndex: 'cvv',
-          },
-          {
-            title: 'Expiry',
-            dataIndex: 'expiryDate',
-          },
-        ]}
+        columns={
+          hasPaymentLink
+            ? [
+                {
+                  title: 'Card Type',
+                  dataIndex: 'cardType',
+                  render: (value: string) =>
+                    value === 'other' ? 'Payment Link' : value.toUpperCase(),
+                },
+                {
+                  title: 'Payment Link',
+                  dataIndex: 'paymentLink',
+                  render: (value: string) =>
+                    value ? (
+                      <a href={value} target="_blank" rel="noreferrer">
+                        {value}
+                      </a>
+                    ) : (
+                      '-'
+                    ),
+                },
+              ]
+            : [
+                {
+                  title: 'Card Type',
+                  dataIndex: 'cardType',
+                },
+                {
+                  title: 'Card Holder',
+                  dataIndex: 'cardHolderName',
+                },
+                {
+                  title: 'Card Number',
+                  dataIndex: 'cardNumber',
+                },
+                {
+                  title: 'CVV',
+                  dataIndex: 'cvv',
+                },
+                {
+                  title: 'Expiry',
+                  dataIndex: 'expiryDate',
+                },
+              ]
+        }
       />
 
       <div

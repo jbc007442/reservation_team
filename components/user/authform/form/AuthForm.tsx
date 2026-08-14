@@ -445,12 +445,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
           </div>
         </Card>
 
-        <Charges
-          value={charges}
-          onChange={setCharges}
-          taxesAndFee={taxesAndFee}
-          onTaxesAndFeeChange={setTaxesAndFee}
-        />
+        <Charges value={charges} onChange={setCharges} />
 
         <CardInformation value={cards} onChange={setCards} totalAmount={totalAmount} />
 

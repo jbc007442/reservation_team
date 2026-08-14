@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, Col, Row, Skeleton, Typography } from 'antd';
-import { CalendarOutlined, RiseOutlined, WalletOutlined } from '@ant-design/icons';
-
-const { Title, Text } = Typography;
+import { Card, Col, Row, Skeleton, Statistic } from 'antd';
+import {
+  CalendarOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
+  RiseOutlined,
+} from '@ant-design/icons';
 
 export interface StatCard {
   title: string;
@@ -13,8 +17,17 @@ export interface StatCard {
   color: string;
 }
 
-interface StatsResponse {
-  totalBookings: number;
+interface DashboardStats {
+  bookingCreated: number;
+  authPending: number;
+  authCompleted: number;
+  ticketed: number;
+  cancelled: number;
+  refunded: number;
+  chargeBack: number;
+  followUp: number;
+  cardCharged: number;
+  cardDecline: number;
 
   revenue: {
     totalCharges: number;
@@ -48,26 +61,74 @@ export default function StatsCards() {
         throw new Error(result.message || 'Failed to fetch dashboard statistics');
       }
 
-      const data: StatsResponse = result.data;
+      const data: DashboardStats = result.data;
 
       setStats([
         {
-          title: 'Total Bookings',
-          value: data.totalBookings,
+          title: 'Booking Created',
+          value: data.bookingCreated,
           icon: <CalendarOutlined />,
           color: '#1677ff',
+        },
+        {
+          title: 'Auth Pending',
+          value: data.authPending,
+          icon: <ClockCircleOutlined />,
+          color: '#faad14',
+        },
+        {
+          title: 'Auth Completed',
+          value: data.authCompleted,
+          icon: <CheckCircleOutlined />,
+          color: '#52c41a',
+        },
+        {
+          title: 'Ticketed',
+          value: data.ticketed,
+          icon: <CheckCircleOutlined />,
+          color: '#389e0d',
+        },
+        {
+          title: 'Card Charged',
+          value: data.cardCharged,
+          icon: <CheckCircleOutlined />,
+          color: '#16a34a',
+        },
+        {
+          title: 'Card Declined',
+          value: data.cardDecline,
+          icon: <CloseCircleOutlined />,
+          color: '#cf1322',
+        },
+        {
+          title: 'Refunded',
+          value: data.refunded,
+          icon: <CheckCircleOutlined />,
+          color: '#13c2c2',
+        },
+        {
+          title: 'Charge Back',
+          value: data.chargeBack,
+          icon: <CloseCircleOutlined />,
+          color: '#fa541c',
+        },
+        {
+          title: 'Follow Up',
+          value: data.followUp,
+          icon: <ClockCircleOutlined />,
+          color: '#d4b106',
+        },
+        {
+          title: 'Cancelled',
+          value: data.cancelled,
+          icon: <CloseCircleOutlined />,
+          color: '#ff4d4f',
         },
         {
           title: 'Net Gross',
           value: data.revenue.netGross,
           icon: <RiseOutlined />,
           color: '#722ed1',
-        },
-        {
-          title: 'Net Profit',
-          value: data.revenue.netProfit,
-          icon: <WalletOutlined />,
-          color: '#16a34a',
         },
       ]);
     } catch (error) {
@@ -79,53 +140,22 @@ export default function StatsCards() {
 
   return (
     <Row gutter={[16, 16]}>
-      {(loading ? Array.from({ length: 3 }) : stats).map((item, index) => (
-        <Col xs={24} sm={12} lg={8} key={loading ? index : (item as StatCard).title}>
-          <Card
-            style={{
-              borderRadius: 16,
-              border: 'none',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
-            }}
-            styles={{
-              body: {
-                padding: 18,
-              },
-            }}
-          >
+      {(loading ? Array.from({ length: 11 }) : stats).map((item, index) => (
+        <Col xs={24} sm={12} md={8} lg={6} xl={4} key={loading ? index : (item as StatCard).title}>
+          <Card hoverable>
             {loading ? (
-              <Skeleton active avatar={{ size: 'small' }} paragraph={{ rows: 1 }} />
+              <Skeleton active paragraph={{ rows: 1 }} />
             ) : (
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <Text type="secondary" className="text-xs font-medium">
-                    {(item as StatCard).title}
-                  </Text>
-
-                  <Title
-                    level={3}
-                    style={{
-                      marginTop: 6,
-                      marginBottom: 0,
-                      fontSize: 24,
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {typeof (item as StatCard).value === 'number'
-                      ? (item as StatCard).value.toLocaleString()
-                      : (item as StatCard).value}
-                  </Title>
-                </div>
-
-                <div
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg text-white shadow-sm"
-                  style={{
-                    backgroundColor: (item as StatCard).color,
-                  }}
-                >
-                  {(item as StatCard).icon}
-                </div>
-              </div>
+              <Statistic
+                title={(item as StatCard).title}
+                value={(item as StatCard).value}
+                prefix={(item as StatCard).icon}
+                styles={{
+                  content: {
+                    color: (item as StatCard).color,
+                  },
+                }}
+              />
             )}
           </Card>
         </Col>

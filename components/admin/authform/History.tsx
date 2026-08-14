@@ -124,9 +124,9 @@ export default function History({ booking }: HistoryProps) {
         <Timeline
           items={history.map((item) => ({
             color: getColor(item),
-            dot: getIcon(item.action),
+            icon: getIcon(item.action),
 
-            children: (
+            content: (
               <div className="flex items-start justify-between gap-6">
                 <div className="flex-1">
                   <Text strong>{item.action}</Text>
