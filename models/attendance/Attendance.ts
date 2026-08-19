@@ -37,6 +37,20 @@ const AttendanceSchema = new Schema(
       default: null,
     },
 
+    // Current employee state
+    currentStatus: {
+      type: String,
+      enum: ['Working', 'On Break', 'Checked Out'],
+      default: 'Working',
+      index: true,
+    },
+
+    // Last attendance activity
+    lastActivityAt: {
+      type: Date,
+      default: null,
+    },
+
     workingMinutes: {
       type: Number,
       default: 0,
@@ -115,8 +129,7 @@ const AttendanceSchema = new Schema(
 );
 
 /**
- * One attendance record
- * per employee per day
+ * One attendance record per employee per day
  */
 AttendanceSchema.index(
   {
@@ -131,10 +144,14 @@ AttendanceSchema.index(
 /**
  * Common Queries
  */
-
 AttendanceSchema.index({
   employee: 1,
   status: 1,
+});
+
+AttendanceSchema.index({
+  employee: 1,
+  currentStatus: 1,
 });
 
 AttendanceSchema.index({

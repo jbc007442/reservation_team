@@ -1,8 +1,8 @@
-import React from 'react'
+import Reports from '@/components/admin/attendance/reports/Reports'
 
 const page = () => {
   return (
-    <div>page</div>
+    <div><Reports/></div>
   )
 }
 

@@ -73,6 +73,10 @@ const menus = [
         name: 'Auth Form',
         href: '/admin/booking/authform',
       },
+      {
+        name: 'DPR',
+        href: '/admin/booking/dpr',
+      },
     ],
   },
   {
