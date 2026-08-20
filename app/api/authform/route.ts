@@ -7,6 +7,7 @@ import { verifyToken } from '@/lib/jwt';
 
 import Booking from '@/models/booking/Booking';
 import AuthForm from '@/models/booking/AuthForm';
+import User from '@/models/user/User';
 
 import { sendAuthorizationEmail } from '@/lib/email/sendAuthorizationEmail';
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
@@ -29,12 +31,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const decoded = verifyToken(token) as {
-      id: string;
-      role: string;
-      email: string;
-      name: string;
-    };
+    /*
+     * JWT contains:
+     * {
+     *   userId,
+     *   role
+     * }
+     */
+
+    const payload = verifyToken(token);
+
+    /*
+     * Get logged-in user
+     */
+
+    const user = await User.findById(payload.userId).select('_id name email role').lean();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'User not found.',
+        },
+        { status: 401 }
+      );
+    }
 
     const body = await req.json();
 
@@ -79,6 +100,11 @@ export async function POST(req: NextRequest) {
     const authForm = await AuthForm.create({
       ...body,
 
+      /*
+       * Save creator
+       */
+      createdBy: user._id,
+
       approval: {
         status: 'sent',
         token: approvalToken,
@@ -95,15 +121,17 @@ export async function POST(req: NextRequest) {
       throw new Error('Authorization Form not found after creation.');
     }
 
-    // Tell TypeScript that bookingId has been populated
     const bookingData = savedAuthForm.bookingId as any;
 
     /* ---------------- Send Email ---------------- */
 
     await sendAuthorizationEmail({
       to: bookingData.customer.email || '',
+
       subject: savedAuthForm.email?.subject || 'Booking Authorization Required',
+
       approvalLink,
+
       authForm: savedAuthForm,
     });
 
@@ -111,9 +139,13 @@ export async function POST(req: NextRequest) {
 
     authForm.mailHistory.push({
       to: bookingData.customer.email,
+
       subject: savedAuthForm.email?.subject || 'Booking Authorization Required',
+
       status: 'sent',
+
       provider: 'Nodemailer',
+
       sentAt: new Date(),
     });
 
@@ -121,9 +153,13 @@ export async function POST(req: NextRequest) {
 
     authForm.timeline.push({
       action: 'Authorization Form Created',
+
       description: 'Authorization form created by staff.',
-      performedBy: decoded.id,
+
+      performedBy: user._id,
+
       source: 'staff',
+
       createdAt: new Date(),
     });
 
@@ -134,17 +170,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
+
         message: 'Authorization Form created and email sent successfully.',
+
         data: authForm,
       },
       { status: 201 }
     );
   } catch (error: any) {
-    console.error(error);
+    console.error('POST AuthForm Error:', error);
 
     return NextResponse.json(
       {
         success: false,
+
         message: error.message || 'Internal Server Error',
       },
       { status: 500 }
@@ -153,11 +192,13 @@ export async function POST(req: NextRequest) {
 }
 
 /* ---------------- GET : All Auth Forms ---------------- */
+
 export async function GET() {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
@@ -170,18 +211,41 @@ export async function GET() {
       );
     }
 
-    const decoded = verifyToken(token) as {
-      id: string;
-      role: string;
-      email: string;
-      name: string;
-    };
+    /*
+     * Decode JWT
+     */
+
+    const payload = verifyToken(token);
+
+    /*
+     * Get logged-in user
+     */
+
+    const user = await User.findById(payload.userId).select('_id name email role').lean();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'User not found.',
+        },
+        { status: 401 }
+      );
+    }
+
+    /*
+     * Admin:
+     *   Get all Auth Forms
+     *
+     * Employee:
+     *   Get only Auth Forms created by himself
+     */
 
     const filter =
-      decoded.role === 'admin'
+      user.role === 'admin'
         ? {}
         : {
-            createdBy: decoded.id,
+            createdBy: user._id,
           };
 
     const authForms = await AuthForm.find(filter)
@@ -189,28 +253,32 @@ export async function GET() {
         path: 'bookingId',
         select: 'bookingNo customer',
       })
-      .select('bookingId email bookingType serviceType approval createdAt updatedAt')
-      .sort({ createdAt: -1 })
+      .select('bookingId email bookingType serviceType approval createdBy createdAt updatedAt')
+      .sort({
+        createdAt: -1,
+      })
       .lean();
 
     return NextResponse.json(
       {
         success: true,
+
         count: authForms.length,
+
         data: authForms,
       },
       { status: 200 }
     );
   } catch (error: any) {
-    console.error(error);
+    console.error('GET AuthForm Error:', error);
 
     return NextResponse.json(
       {
         success: false,
+
         message: error.message || 'Internal Server Error',
       },
       { status: 500 }
     );
   }
 }
-

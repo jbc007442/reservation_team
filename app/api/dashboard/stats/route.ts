@@ -9,12 +9,16 @@ export async function GET(req: NextRequest) {
   try {
     await connectDB();
 
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication
+    |--------------------------------------------------------------------------
+    */
+
     const token =
       req.headers.get('authorization')?.split(' ')[1] || req.cookies.get('token')?.value || '';
 
-    const user = verifyToken(token);
-
-    if (!user || typeof user === 'string' || !(user as any).role) {
+    if (!token) {
       return NextResponse.json(
         {
           success: false,
@@ -24,45 +28,69 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const payload = user as {
-      id: string;
-      role: 'admin' | 'employee';
-    };
+    const payload = verifyToken(token);
 
-    // --------------------------------
-    // Get Bookings
-    // --------------------------------
+    if (!payload?.userId || !payload?.role) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Unauthorized',
+        },
+        { status: 401 }
+      );
+    }
+
+    const userId = payload.userId;
+    const role = payload.role;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Bookings
+    |--------------------------------------------------------------------------
+    */
 
     const bookings =
-      payload.role === 'admin'
+      role === 'admin'
         ? await Booking.find({}).select('_id status').lean()
         : await Booking.find({
-            createdBy: payload.id,
+            createdBy: userId,
           })
             .select('_id status')
             .lean();
 
-    const bookingIdList = bookings.map((booking: any) => booking._id);
+    const bookingIdList = bookings.map((booking) => booking._id);
 
-    // --------------------------------
-    // Booking Status Statistics
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Booking Status Statistics
+    |--------------------------------------------------------------------------
+    */
 
     const stats = {
       total: bookings.length,
+
       bookingCreated: 0,
+
       authPending: 0,
+
       authCompleted: 0,
+
       ticketed: 0,
+
       cancelled: 0,
+
       refunded: 0,
+
       chargeBack: 0,
+
       followUp: 0,
+
       cardCharged: 0,
+
       cardDecline: 0,
     };
 
-    for (const booking of bookings as any[]) {
+    for (const booking of bookings) {
       switch (booking.status) {
         case 'booking_created':
           stats.bookingCreated++;
@@ -109,9 +137,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // --------------------------------
-    // Revenue
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Revenue
+    |--------------------------------------------------------------------------
+    */
 
     const revenueResult = await AuthForm.aggregate([
       {
@@ -121,6 +151,7 @@ export async function GET(req: NextRequest) {
           },
         },
       },
+
       {
         $project: {
           chargesTotal: {
@@ -129,24 +160,30 @@ export async function GET(req: NextRequest) {
                 input: {
                   $ifNull: ['$charges', []],
                 },
+
                 as: 'charge',
+
                 in: {
                   $ifNull: ['$$charge.amount', 0],
                 },
               },
             },
           },
+
           taxesAndFee: {
             $ifNull: ['$taxesAndFee', 0],
           },
         },
       },
+
       {
         $group: {
           _id: null,
+
           totalCharges: {
             $sum: '$chargesTotal',
           },
+
           totalTaxesAndFee: {
             $sum: '$taxesAndFee',
           },
@@ -160,35 +197,44 @@ export async function GET(req: NextRequest) {
     };
 
     const totalCharges = Number(revenue.totalCharges || 0);
+
     const totalTaxesAndFee = Number(revenue.totalTaxesAndFee || 0);
 
     const netGross = totalCharges + totalTaxesAndFee;
+
     const netProfit = totalTaxesAndFee;
 
-    // --------------------------------
-    // Response
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Response
+    |--------------------------------------------------------------------------
+    */
 
     return NextResponse.json({
       success: true,
+
       data: {
         ...stats,
 
         revenue: {
           totalCharges,
+
           taxesAndFee: totalTaxesAndFee,
+
           netGross,
+
           netProfit,
         },
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Dashboard stats error:', error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error.message || 'Failed to load dashboard statistics.',
+
+        message: error instanceof Error ? error.message : 'Failed to load dashboard statistics.',
       },
       { status: 500 }
     );

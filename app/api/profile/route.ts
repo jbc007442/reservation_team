@@ -1,38 +1,99 @@
 // app/api/profile/route.ts
 
+import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+
 import { verifyToken } from '@/lib/jwt';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/user/User';
-import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
 
 export async function PUT(req: NextRequest) {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Unauthorized',
+        },
+        { status: 401 }
+      );
     }
 
-    const decoded = verifyToken(token) as { id: string };
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Token
+    |--------------------------------------------------------------------------
+    */
+
+    const payload = verifyToken(token);
+
+    const userId = payload.userId;
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Unauthorized',
+        },
+        { status: 401 }
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Body
+    |--------------------------------------------------------------------------
+    */
 
     const body = await req.json();
 
+    /*
+    |--------------------------------------------------------------------------
+    | Update User
+    |--------------------------------------------------------------------------
+    */
+
     const user = await User.findByIdAndUpdate(
-      decoded.id,
+      userId,
       {
         $set: body,
       },
       {
         new: true,
+        runValidators: true,
       }
     ).select('-password');
 
-    return NextResponse.json(user);
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'User not found.',
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      data: user,
+    });
   } catch (error) {
-    return NextResponse.json({ message: 'Something went wrong' }, { status: 500 });
+    console.error('Profile PUT API Error:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : 'Something went wrong.',
+      },
+      { status: 500 }
+    );
   }
 }

@@ -1,21 +1,25 @@
+import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
-
 import { connectDB } from '@/lib/mongodb';
+
 import AuthForm from '@/models/booking/AuthForm';
-import Booking from '@/models/booking/Booking';
+
+import User from '@/models/user/User';
+
 import mongoose from 'mongoose';
 
 import { sendAuthorizationEmail } from '@/lib/email/sendAuthorizationEmail';
 
 /* ---------------- GET : Single Auth Form ---------------- */
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
@@ -32,7 +36,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const { id } = await params;
 
-    // Validate MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         {
@@ -78,11 +81,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 /* ---------------- PATCH : Update Auth Form ---------------- */
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
@@ -95,16 +100,38 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       );
     }
 
-    const decoded = verifyToken(token) as {
-      id: string;
-      role: string;
-      email: string;
-      name: string;
-    };
+    /*
+     * JWT contains:
+     * {
+     *   userId,
+     *   role
+     * }
+     */
+
+    const payload = verifyToken(token);
+
+    /*
+     * Get logged-in user
+     */
+
+    const user = await User.findById(payload.userId).select('_id name email role').lean();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'User not found.',
+        },
+        { status: 401 }
+      );
+    }
 
     const { id } = await params;
 
-    // Validate MongoDB ObjectId
+    /*
+     * Validate MongoDB ObjectId
+     */
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         {
@@ -117,7 +144,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const body = await req.json();
 
-    // Get existing AuthForm
+    /*
+     * Get existing AuthForm
+     */
+
     const existingAuthForm = await AuthForm.findById(id).populate('bookingId');
 
     if (!existingAuthForm) {
@@ -130,7 +160,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       );
     }
 
-    // Lock if ALL cards have transaction IDs
+    /*
+     * Lock if ALL cards have transaction IDs
+     */
+
     const paymentLocked =
       existingAuthForm.cards.length > 0 &&
       existingAuthForm.cards.every(
@@ -146,6 +179,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         { status: 403 }
       );
     }
+
+    /*
+     * Update AuthForm
+     */
 
     const authForm = await AuthForm.findByIdAndUpdate(
       id,
@@ -170,7 +207,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const bookingData = authForm.bookingId as any;
 
+    /*
+     * Approval link
+     */
+
     const approvalLink = `${process.env.NEXT_PUBLIC_APP_URL}/approve?token=${authForm.approval.token}`;
+
+    /*
+     * Send authorization email
+     */
 
     await sendAuthorizationEmail({
       to: bookingData.customer.email || '',
@@ -178,6 +223,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       approvalLink,
       authForm,
     });
+
+    /*
+     * Mail history
+     */
 
     authForm.mailHistory.push({
       to: bookingData.customer.email,
@@ -187,14 +236,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       sentAt: new Date(),
     });
 
-    /* ---------------- Timeline ---------------- */
-    console.log('Decoded:', decoded);
-    console.log('performedBy:', decoded.id);
+    /*
+     * Timeline
+     */
+
+    console.log('Updated by:', user._id.toString());
+
     authForm.timeline.push({
       action: 'Authorization Form Updated',
+
       description: 'Authorization form updated by staff.',
-      performedBy: decoded.id,
+
+      performedBy: user._id,
+
       source: 'staff',
+
       createdAt: new Date(),
     });
 
@@ -222,11 +278,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 /* ---------------- DELETE : Delete Auth Form ---------------- */
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
@@ -243,7 +301,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const { id } = await params;
 
-    // Validate MongoDB ObjectId
+    /*
+     * Validate MongoDB ObjectId
+     */
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json(
         {
