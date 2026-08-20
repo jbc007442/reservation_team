@@ -17,36 +17,26 @@ export async function GET() {
       return NextResponse.json(
         {
           success: false,
+          message: 'Unauthorized. Token not found.',
         },
         { status: 401 }
       );
     }
 
+    // verifyToken now returns:
+    // {
+    //   userId: string,
+    //   role: string
+    // }
     const payload = verifyToken(token);
 
-    // verifyToken may return a string or an object (JwtPayload). Ensure we have an object with an id.
-    if (
-      typeof payload === 'string' ||
-      !payload ||
-      typeof payload !== 'object' ||
-      !('id' in payload)
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-        },
-        { status: 401 }
-      );
-    }
-
-    const userId = (payload as any).id;
-
-    const user = await User.findById(userId).select('-password');
+    const user = await User.findById(payload.userId).select('-password').lean();
 
     if (!user) {
       return NextResponse.json(
         {
           success: false,
+          message: 'User not found.',
         },
         { status: 401 }
       );
@@ -56,10 +46,13 @@ export async function GET() {
       success: true,
       user,
     });
-  } catch {
+  } catch (error) {
+    console.error('Auth Me API Error:', error);
+
     return NextResponse.json(
       {
         success: false,
+        message: 'Unauthorized. Invalid or expired token.',
       },
       { status: 401 }
     );

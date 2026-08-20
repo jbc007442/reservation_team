@@ -2,6 +2,11 @@ import { Schema, model, models, Types } from 'mongoose';
 
 const AttendanceSchema = new Schema(
   {
+    /*
+    |--------------------------------------------------------------------------
+    | Employee
+    |--------------------------------------------------------------------------
+    */
     employee: {
       type: Types.ObjectId,
       ref: 'User',
@@ -9,24 +14,22 @@ const AttendanceSchema = new Schema(
       index: true,
     },
 
+    /*
+    |--------------------------------------------------------------------------
+    | Attendance Date
+    |--------------------------------------------------------------------------
+    | One attendance record per employee per day.
+    */
     date: {
       type: Date,
       required: true,
-      index: true,
     },
 
-    shift: {
-      type: Types.ObjectId,
-      ref: 'Shift',
-      default: null,
-    },
-
-    roster: {
-      type: Types.ObjectId,
-      ref: 'Roster',
-      default: null,
-    },
-
+    /*
+    |--------------------------------------------------------------------------
+    | Check In / Check Out
+    |--------------------------------------------------------------------------
+    */
     checkIn: {
       type: Date,
       default: null,
@@ -37,7 +40,11 @@ const AttendanceSchema = new Schema(
       default: null,
     },
 
-    // Current employee state
+    /*
+    |--------------------------------------------------------------------------
+    | Current Employee State
+    |--------------------------------------------------------------------------
+    */
     currentStatus: {
       type: String,
       enum: ['Working', 'On Break', 'Checked Out'],
@@ -45,42 +52,45 @@ const AttendanceSchema = new Schema(
       index: true,
     },
 
-    // Last attendance activity
+    /*
+    |--------------------------------------------------------------------------
+    | Last Activity
+    |--------------------------------------------------------------------------
+    */
     lastActivityAt: {
       type: Date,
       default: null,
     },
 
+    /*
+    |--------------------------------------------------------------------------
+    | Working Time
+    |--------------------------------------------------------------------------
+    | Stored in minutes.
+    */
     workingMinutes: {
       type: Number,
       default: 0,
       min: 0,
     },
 
+    /*
+    |--------------------------------------------------------------------------
+    | Break Time
+    |--------------------------------------------------------------------------
+    | Total break duration for the day in minutes.
+    */
     breakMinutes: {
       type: Number,
       default: 0,
       min: 0,
     },
 
-    overtimeMinutes: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    lateMinutes: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    earlyExitMinutes: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
+    /*
+    |--------------------------------------------------------------------------
+    | Attendance Status
+    |--------------------------------------------------------------------------
+    */
     status: {
       type: String,
       enum: ['Present', 'Absent', 'Half Day', 'Leave', 'Holiday', 'Weekly Off'],
@@ -88,18 +98,11 @@ const AttendanceSchema = new Schema(
       index: true,
     },
 
-    attendanceSource: {
-      type: String,
-      enum: ['Manual', 'Web', 'Mobile', 'Biometric', 'Face', 'API'],
-      default: 'Manual',
-    },
-
-    notes: {
-      type: String,
-      default: '',
-      trim: true,
-    },
-
+    /*
+    |--------------------------------------------------------------------------
+    | Attendance Approval
+    |--------------------------------------------------------------------------
+    */
     approvedBy: {
       type: Types.ObjectId,
       ref: 'User',
@@ -111,6 +114,11 @@ const AttendanceSchema = new Schema(
       default: null,
     },
 
+    /*
+    |--------------------------------------------------------------------------
+    | Audit
+    |--------------------------------------------------------------------------
+    */
     createdBy: {
       type: Types.ObjectId,
       ref: 'User',
@@ -128,9 +136,11 @@ const AttendanceSchema = new Schema(
   }
 );
 
-/**
- * One attendance record per employee per day
- */
+/*
+|--------------------------------------------------------------------------
+| One Attendance Record Per Employee Per Day
+|--------------------------------------------------------------------------
+*/
 AttendanceSchema.index(
   {
     employee: 1,
@@ -141,9 +151,12 @@ AttendanceSchema.index(
   }
 );
 
-/**
- * Common Queries
- */
+/*
+|--------------------------------------------------------------------------
+| Common Queries
+|--------------------------------------------------------------------------
+*/
+
 AttendanceSchema.index({
   employee: 1,
   status: 1,
@@ -162,22 +175,6 @@ AttendanceSchema.index({
 AttendanceSchema.index({
   employee: 1,
   checkOut: 1,
-});
-
-AttendanceSchema.index({
-  shift: 1,
-});
-
-AttendanceSchema.index({
-  roster: 1,
-});
-
-AttendanceSchema.index({
-  attendanceSource: 1,
-});
-
-AttendanceSchema.index({
-  date: 1,
 });
 
 AttendanceSchema.index({

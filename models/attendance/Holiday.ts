@@ -21,8 +21,9 @@ const HolidaySchema = new Schema(
 
     holidayType: {
       type: String,
-      enum: ['National', 'Festival', 'Company', 'Optional', 'Weekend'],
-      default: 'Company',
+      enum: ['National Holiday', 'Public Holiday', 'Festival'],
+      default: 'Public Holiday',
+      required: true,
     },
 
     isOptional: {
@@ -39,6 +40,7 @@ const HolidaySchema = new Schema(
       type: String,
       enum: ['active', 'inactive'],
       default: 'active',
+      index: true,
     },
 
     createdBy: {
@@ -60,6 +62,5 @@ const HolidaySchema = new Schema(
 
 HolidaySchema.index({ date: 1 });
 HolidaySchema.index({ holidayType: 1 });
-HolidaySchema.index({ status: 1 });
 
 export default models.Holiday || model('Holiday', HolidaySchema);

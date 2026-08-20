@@ -78,17 +78,15 @@ const AttendanceLogSchema = new Schema(
   }
 );
 
-/**
- * Indexes
- */
+/*
+|--------------------------------------------------------------------------
+| Indexes
+|--------------------------------------------------------------------------
+*/
 
 AttendanceLogSchema.index({
   employee: 1,
   dateTime: 1,
-});
-
-AttendanceLogSchema.index({
-  attendance: 1,
 });
 
 AttendanceLogSchema.index({

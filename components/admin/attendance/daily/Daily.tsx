@@ -1,153 +1,215 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Card, Col, Input, Row, Select, Table, Tag } from 'antd';
-import { EyeOutlined, DownloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, EyeOutlined, SearchOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+
+interface Employee {
+  _id: string;
+  employeeId?: string;
+  name: string;
+}
+
+interface AttendanceRecord {
+  _id: string;
+  employee: Employee;
+  date: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  currentStatus: 'Working' | 'On Break' | 'Checked Out';
+  workingMinutes: number;
+  breakMinutes: number;
+  status: 'Present' | 'Absent' | 'Half Day' | 'Leave' | 'Holiday' | 'Weekly Off';
+}
 
 export default function Daily() {
-  const [attendance] = useState([
-    {
-      key: '1',
-      employee: 'Tarun Kumar',
-      employeeId: 'EMP001',
-      shift: 'Morning',
-      checkIn: '09:03 AM',
-      checkOut: '06:08 PM',
-      hours: '09h 05m',
-      status: 'Present',
-      late: 'No',
-    },
-    {
-      key: '2',
-      employee: 'Rahul Sharma',
-      employeeId: 'EMP002',
-      shift: 'Morning',
-      checkIn: '09:22 AM',
-      checkOut: '--',
-      hours: '06h 15m',
-      status: 'Working',
-      late: 'Yes',
-    },
-    {
-      key: '3',
-      employee: 'Amit Singh',
-      employeeId: 'EMP003',
-      shift: 'Morning',
-      checkIn: '--',
-      checkOut: '--',
-      hours: '--',
-      status: 'Absent',
-      late: '--',
-    },
-    {
-      key: '4',
-      employee: 'Riya Patel',
-      employeeId: 'EMP004',
-      shift: 'Weekly Off',
-      checkIn: '--',
-      checkOut: '--',
-      hours: '--',
-      status: 'Weekly Off',
-      late: '--',
-    },
-    {
-      key: '5',
-      employee: 'Priya Sharma',
-      employeeId: 'EMP005',
-      shift: 'Leave',
-      checkIn: '--',
-      checkOut: '--',
-      hours: '--',
-      status: 'Leave',
-      late: '--',
-    },
-  ]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('All');
+
+  const fetchAttendance = async () => {
+    try {
+      setLoading(true);
+
+      const params = new URLSearchParams();
+
+      if (search.trim()) {
+        params.set('search', search.trim());
+      }
+
+      if (status !== 'All') {
+        params.set('status', status);
+      }
+
+      const response = await fetch(`/api/admin/attendance/daily?${params.toString()}`, {
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to fetch attendance.');
+      }
+
+      setAttendance(result.data || []);
+    } catch (error) {
+      console.error('Attendance fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [search, status]);
+
+  const formatTime = (value: string | null) => {
+    if (!value) {
+      return '--';
+    }
+
+    return dayjs(value).format('hh:mm A');
+  };
+
+  const formatWorkingTime = (minutes: number) => {
+    if (!minutes) {
+      return '00h 00m';
+    }
+
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    return `${String(hours).padStart(2, '0')}h ${String(mins).padStart(2, '0')}m`;
+  };
+
+  const getCurrentStatusColor = (status: AttendanceRecord['currentStatus']) => {
+    switch (status) {
+      case 'Working':
+        return 'blue';
+
+      case 'On Break':
+        return 'orange';
+
+      case 'Checked Out':
+        return 'green';
+
+      default:
+        return 'default';
+    }
+  };
+
+  const getStatusColor = (status: AttendanceRecord['status']) => {
+    switch (status) {
+      case 'Present':
+        return 'green';
+
+      case 'Absent':
+        return 'red';
+
+      case 'Half Day':
+        return 'orange';
+
+      case 'Leave':
+        return 'purple';
+
+      case 'Holiday':
+        return 'cyan';
+
+      case 'Weekly Off':
+        return 'default';
+
+      default:
+        return 'default';
+    }
+  };
 
   const columns = [
     {
       title: 'Employee ID',
-      dataIndex: 'employeeId',
-      width: 120,
+      key: 'employeeId',
+      width: 140,
+      render: (_: unknown, record: AttendanceRecord) => record.employee?.employeeId || '--',
     },
+
     {
       title: 'Employee',
-      dataIndex: 'employee',
-      width: 180,
+      key: 'employee',
+      width: 200,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <span className="font-medium text-slate-700">{record.employee?.name || '--'}</span>
+      ),
     },
-    {
-      title: 'Shift',
-      dataIndex: 'shift',
-      width: 130,
-    },
+
     {
       title: 'Check In',
-      dataIndex: 'checkIn',
-      width: 120,
+      key: 'checkIn',
+      width: 130,
+      render: (_: unknown, record: AttendanceRecord) => formatTime(record.checkIn),
     },
+
     {
       title: 'Check Out',
-      dataIndex: 'checkOut',
-      width: 120,
+      key: 'checkOut',
+      width: 130,
+      render: (_: unknown, record: AttendanceRecord) => formatTime(record.checkOut),
     },
+
     {
       title: 'Working Hours',
-      dataIndex: 'hours',
-      width: 140,
+      key: 'workingMinutes',
+      width: 150,
+      render: (_: unknown, record: AttendanceRecord) => formatWorkingTime(record.workingMinutes),
     },
-    {
-      title: 'Late',
-      dataIndex: 'late',
-      width: 90,
-      align: 'center' as const,
-      render: (late: string) => {
-        if (late === '--') return '--';
 
-        return <Tag color={late === 'Yes' ? 'red' : 'green'}>{late}</Tag>;
-      },
+    {
+      title: 'Break',
+      key: 'breakMinutes',
+      width: 120,
+      render: (_: unknown, record: AttendanceRecord) => formatWorkingTime(record.breakMinutes),
     },
+
+    {
+      title: 'Current Status',
+      key: 'currentStatus',
+      width: 150,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <Tag color={getCurrentStatusColor(record.currentStatus)}>{record.currentStatus}</Tag>
+      ),
+    },
+
     {
       title: 'Status',
-      dataIndex: 'status',
-      width: 140,
-      render: (status: string) => {
-        let color = 'default';
-
-        switch (status) {
-          case 'Present':
-            color = 'green';
-            break;
-          case 'Working':
-            color = 'blue';
-            break;
-          case 'Absent':
-            color = 'red';
-            break;
-          case 'Weekly Off':
-            color = 'orange';
-            break;
-          case 'Leave':
-            color = 'purple';
-            break;
-        }
-
-        return <Tag color={color}>{status}</Tag>;
-      },
+      key: 'status',
+      width: 130,
+      render: (_: unknown, record: AttendanceRecord) => (
+        <Tag color={getStatusColor(record.status)}>{record.status}</Tag>
+      ),
     },
+
     {
       title: 'Action',
-      width: 120,
-      render: () => <Button icon={<EyeOutlined />}>View</Button>,
+      key: 'action',
+      width: 100,
+      fixed: 'right' as const,
+      render: () => (
+        <Button icon={<EyeOutlined />} size="small">
+          View
+        </Button>
+      ),
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Daily Attendance</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Daily Attendance</h1>
 
-          <p className="text-slate-500">Monitor today's employee attendance.</p>
+          <p className="mt-1 text-slate-500">Monitor today's employee attendance.</p>
         </div>
 
         <Button type="primary" icon={<DownloadOutlined />}>
@@ -156,36 +218,33 @@ export default function Daily() {
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="rounded-xl">
         <Row gutter={[16, 16]}>
-          <Col xs={24} md={8}>
-            <Input.Search allowClear placeholder="Search employee..." />
-          </Col>
-
-          <Col xs={24} md={6}>
-            <Select
-              className="w-full"
-              defaultValue="All"
-              options={[
-                { label: 'All Status', value: 'All' },
-                { label: 'Present', value: 'Present' },
-                { label: 'Working', value: 'Working' },
-                { label: 'Absent', value: 'Absent' },
-                { label: 'Leave', value: 'Leave' },
-                { label: 'Weekly Off', value: 'Weekly Off' },
-              ]}
+          <Col xs={24} md={10} lg={8}>
+            <Input
+              size="large"
+              allowClear
+              prefix={<SearchOutlined className="text-slate-400" />}
+              placeholder="Search employee or ID..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </Col>
 
-          <Col xs={24} md={6}>
+          <Col xs={24} md={8} lg={5}>
             <Select
+              size="large"
               className="w-full"
-              defaultValue="All"
+              value={status}
+              onChange={setStatus}
               options={[
-                { label: 'All Shifts', value: 'All' },
-                { label: 'Morning', value: 'Morning' },
-                { label: 'Evening', value: 'Evening' },
-                { label: 'Night', value: 'Night' },
+                { label: 'All Status', value: 'All' },
+                { label: 'Present', value: 'Present' },
+                { label: 'Absent', value: 'Absent' },
+                { label: 'Half Day', value: 'Half Day' },
+                { label: 'Leave', value: 'Leave' },
+                { label: 'Holiday', value: 'Holiday' },
+                { label: 'Weekly Off', value: 'Weekly Off' },
               ]}
             />
           </Col>
@@ -193,13 +252,20 @@ export default function Daily() {
       </Card>
 
       {/* Table */}
-      <Card title="Today's Attendance">
+      <Card
+        title={<span className="text-lg font-semibold">Today's Attendance</span>}
+        className="overflow-hidden rounded-xl"
+      >
         <Table
-          rowKey="key"
+          rowKey="_id"
           columns={columns}
           dataSource={attendance}
-          pagination={{ pageSize: 10 }}
-          scroll={{ x: 1400 }}
+          loading={loading}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+          }}
+          scroll={{ x: 1250 }}
         />
       </Card>
     </div>

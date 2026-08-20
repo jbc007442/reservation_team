@@ -9,25 +9,27 @@
 //   try {
 //     await connectDB();
 
-//     const { email, password } = await req.json();
+//     const { name, password } = await req.json();
 
-//     if (!email || !password) {
+//     if (!name || !password) {
 //       return NextResponse.json(
 //         {
 //           success: false,
-//           message: 'Email and password are required.',
+//           message: 'Username and password are required.',
 //         },
 //         { status: 400 }
 //       );
 //     }
 
-//     const user = await User.findOne({ email });
+//     const user = await User.findOne({
+//       name: name.trim(),
+//     });
 
 //     if (!user) {
 //       return NextResponse.json(
 //         {
 //           success: false,
-//           message: 'Invalid email or password.',
+//           message: 'Invalid username or password.',
 //         },
 //         { status: 401 }
 //       );
@@ -39,14 +41,15 @@
 //       return NextResponse.json(
 //         {
 //           success: false,
-//           message: 'Invalid email or password.',
+//           message: 'Invalid username or password.',
 //         },
 //         { status: 401 }
 //       );
 //     }
 
+//     // Create JWT using userId
 //     const token = signToken({
-//       id: user._id,
+//       userId: user._id.toString(),
 //       role: user.role,
 //     });
 
@@ -66,7 +69,7 @@
 
 //     return response;
 //   } catch (error) {
-//     console.log(error);
+//     console.error('Login API Error:', error);
 
 //     return NextResponse.json(
 //       {
@@ -79,10 +82,14 @@
 // }
 
 import bcrypt from 'bcryptjs';
+import dayjs from 'dayjs';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { signToken } from '@/lib/jwt';
 import { connectDB } from '@/lib/mongodb';
+
+import Attendance from '@/models/attendance/Attendance';
+import AttendanceLog from '@/models/attendance/AttendanceLog';
 import User from '@/models/user/User';
 
 export async function POST(req: NextRequest) {
@@ -101,6 +108,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    /*
+     * Find user
+     */
     const user = await User.findOne({
       name: name.trim(),
     });
@@ -115,6 +125,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    /*
+     * Check password
+     */
     const match = await bcrypt.compare(password, user.password);
 
     if (!match) {
@@ -127,10 +140,154 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    /*
+     * Check active user
+     */
+    if (user.status !== 'active') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Your account is inactive.',
+        },
+        { status: 403 }
+      );
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | ATTENDANCE
+     |--------------------------------------------------------------------------
+     |
+     | Admin login should NOT create employee attendance.
+     |
+     */
+    if (user.role !== 'admin') {
+      const now = new Date();
+
+      const startOfDay = dayjs(now).startOf('day').toDate();
+
+      const endOfDay = dayjs(now).endOf('day').toDate();
+
+      /*
+       * Find today's attendance
+       */
+      let attendance = await Attendance.findOne({
+        employee: user._id,
+
+        date: {
+          $gte: startOfDay,
+          $lte: endOfDay,
+        },
+      });
+
+      /*
+       * Create attendance if today's record
+       * does not exist.
+       */
+      if (!attendance) {
+        attendance = await Attendance.create({
+          employee: user._id,
+
+          date: startOfDay,
+
+          checkIn: now,
+
+          checkOut: null,
+
+          currentStatus: 'Working',
+
+          lastActivityAt: now,
+
+          workingMinutes: 0,
+
+          breakMinutes: 0,
+
+          status: 'Present',
+
+          approvedBy: null,
+
+          approvedAt: null,
+
+          createdBy: user._id,
+
+          updatedBy: user._id,
+        });
+
+        /*
+         * Create IN log
+         */
+        await AttendanceLog.create({
+          employee: user._id,
+
+          attendance: attendance._id,
+
+          dateTime: now,
+
+          type: 'IN',
+
+          source: 'Web',
+
+          createdBy: user._id,
+        });
+      } else {
+        /*
+         * Existing attendance
+         *
+         * If already working or on break,
+         * don't create another IN log.
+         */
+        if (attendance.currentStatus !== 'Working' && attendance.currentStatus !== 'On Break') {
+          /*
+           * Employee was previously checked out.
+           * Start a new attendance session.
+           */
+          attendance.checkIn = now;
+
+          attendance.checkOut = null;
+
+          attendance.currentStatus = 'Working';
+
+          attendance.lastActivityAt = now;
+
+          attendance.status = 'Present';
+
+          attendance.updatedBy = user._id;
+
+          await attendance.save();
+
+          await AttendanceLog.create({
+            employee: user._id,
+
+            attendance: attendance._id,
+
+            dateTime: now,
+
+            type: 'IN',
+
+            source: 'Web',
+
+            createdBy: user._id,
+          });
+        }
+      }
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | JWT
+     |--------------------------------------------------------------------------
+     */
+
     const token = signToken({
-      id: user._id,
+      userId: user._id.toString(),
       role: user.role,
     });
+
+    /*
+     |--------------------------------------------------------------------------
+     | Response
+     |--------------------------------------------------------------------------
+     */
 
     const response = NextResponse.json({
       success: true,
@@ -140,20 +297,24 @@ export async function POST(req: NextRequest) {
 
     response.cookies.set('token', token, {
       httpOnly: true,
+
       secure: process.env.NODE_ENV === 'production',
+
       sameSite: 'lax',
+
       path: '/',
+
       maxAge: 60 * 60 * 24 * 7,
     });
 
     return response;
   } catch (error) {
-    console.error(error);
+    console.error('Login API Error:', error);
 
     return NextResponse.json(
       {
         success: false,
-        message: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Internal server error',
       },
       { status: 500 }
     );

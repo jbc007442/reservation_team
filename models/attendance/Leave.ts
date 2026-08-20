@@ -10,9 +10,10 @@ const LeaveSchema = new Schema(
     },
 
     leaveType: {
-      type: Types.ObjectId,
-      ref: 'LeaveType',
+      type: String,
+      enum: ['CL', 'SL', 'PL', 'LOP'],
       required: true,
+      trim: true,
     },
 
     fromDate: {
@@ -88,14 +89,7 @@ const LeaveSchema = new Schema(
   }
 );
 
-/**
- * Indexes
- */
-
-LeaveSchema.index({ employee: 1 });
-
 LeaveSchema.index({ leaveType: 1 });
-
 LeaveSchema.index({ status: 1 });
 
 LeaveSchema.index({

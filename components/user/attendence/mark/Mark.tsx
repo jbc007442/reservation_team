@@ -1,170 +1,337 @@
 'use client';
 
-import { Alert, Button, Card, Col, Divider, Row, Space, Statistic, Tag, Timeline } from 'antd';
-import {
-  ClockCircleOutlined,
-  LoginOutlined,
-  LogoutOutlined,
-  CoffeeOutlined,
-  EnvironmentOutlined,
-  CalendarOutlined,
-} from '@ant-design/icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Card, Timeline, Tag } from 'antd';
+import { CoffeeOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+
+interface BreakRecord {
+  id: string;
+  start: string;
+  end: string | null;
+}
+
+interface TodayAttendance {
+  _id: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  currentStatus: 'Working' | 'On Break' | 'Checked Out';
+  workingMinutes: number;
+  breakMinutes: number;
+}
 
 export default function Mark() {
-  // Dummy data (replace with API later)
-  const attendance = {
-    date: '12 Jul 2026',
-    shift: 'Morning Shift',
-    startTime: '09:00 AM',
-    endTime: '06:00 PM',
-    checkIn: null, // '09:03 AM'
-    checkOut: null, // '06:08 PM'
-    workingHours: '00:00',
-    status: 'Not Checked In',
-    location: 'MWC Digital Solutions',
-    isHoliday: false,
-    isWeeklyOff: false,
+  const [attendance, setAttendance] = useState<TodayAttendance | null>(null);
+
+  const [breaks, setBreaks] = useState<BreakRecord[]>([]);
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  const [loading, setLoading] = useState(false);
+
+  /*
+   * Live clock
+   */
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  /*
+   * Fetch today's attendance
+   */
+  const fetchAttendance = async () => {
+    try {
+      setLoading(true);
+
+      const response = await fetch('/api/admin/attendance/today', {
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to fetch attendance.');
+      }
+
+      setAttendance(result.data || null);
+
+      /*
+       * If your API also returns logs,
+       * populate breaks here.
+       */
+      setBreaks(result.breaks || []);
+    } catch (error) {
+      console.error('Attendance fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (attendance.isHoliday) {
-    return (
-      <Alert
-        type="success"
-        showIcon
-        message="Today is a Holiday"
-        description="Attendance is not required today."
-      />
-    );
-  }
+  useEffect(() => {
+    fetchAttendance();
+  }, []);
 
-  if (attendance.isWeeklyOff) {
-    return <Alert type="info" showIcon message="Weekly Off" description="Enjoy your day off." />;
-  }
+  /*
+   * Format time
+   */
+  const formatTime = (value: string | Date | null) => {
+    if (!value) {
+      return '--';
+    }
+
+    return dayjs(value).format('hh:mm:ss A');
+  };
+
+  /*
+   * Working timer
+   *
+   * Before checkout:
+   * check-in → current time
+   *
+   * After checkout:
+   * check-in → checkout
+   */
+  const workingTime = useMemo(() => {
+    if (!attendance?.checkIn) {
+      return '00:00:00';
+    }
+
+    const start = dayjs(attendance.checkIn);
+
+    const end = attendance.checkOut ? dayjs(attendance.checkOut) : dayjs(currentTime);
+
+    const seconds = Math.max(0, end.diff(start, 'second'));
+
+    const hours = Math.floor(seconds / 3600);
+
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    const remainingSeconds = seconds % 60;
+
+    return [
+      String(hours).padStart(2, '0'),
+      String(minutes).padStart(2, '0'),
+      String(remainingSeconds).padStart(2, '0'),
+    ].join(':');
+  }, [attendance, currentTime]);
+
+  /*
+   * Take Break
+   */
+  const handleTakeBreak = async () => {
+    if (!attendance?._id) {
+      return;
+    }
+
+    if (attendance.currentStatus === 'On Break') {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await fetch('/api/admin/attendance/break', {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+        },
+
+        body: JSON.stringify({
+          attendanceId: attendance._id,
+          type: 'BREAK_IN',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to start break.');
+      }
+
+      await fetchAttendance();
+    } catch (error) {
+      console.error('Break start error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /*
+   * Break Off
+   */
+  const handleBreakOff = async () => {
+    if (!attendance?._id) {
+      return;
+    }
+
+    if (attendance.currentStatus !== 'On Break') {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await fetch('/api/admin/attendance/break', {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+        },
+
+        body: JSON.stringify({
+          attendanceId: attendance._id,
+          type: 'BREAK_OUT',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to end break.');
+      }
+
+      await fetchAttendance();
+    } catch (error) {
+      console.error('Break end error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /*
+   * Timeline
+   */
+  const timelineItems = [
+    ...breaks.map((item) => ({
+      color: 'green',
+
+      dot: <CoffeeOutlined />,
+
+      content: (
+        <div>
+          <div className="font-medium text-slate-700">Break</div>
+
+          <div className="text-sm text-slate-500">
+            {formatTime(item.start)} {item.end ? `- ${formatTime(item.end)}` : ''}
+          </div>
+        </div>
+      ),
+    })),
+
+    ...(attendance?.currentStatus === 'On Break'
+      ? [
+          {
+            color: 'orange',
+
+            dot: <PauseCircleOutlined />,
+
+            content: (
+              <div>
+                <div className="font-medium text-orange-600">Break in Progress</div>
+
+                <div className="text-sm text-slate-500">Break is currently active</div>
+              </div>
+            ),
+          },
+        ]
+      : []),
+
+    ...(breaks.length === 0 && attendance?.currentStatus !== 'On Break'
+      ? [
+          {
+            color: 'gray',
+            content: 'No breaks recorded.',
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">Mark Attendance</h1>
-        <p className="text-slate-500">Check in, check out and track today's working hours.</p>
+
+        <p className="text-slate-500">Manage your breaks and track today's working hours.</p>
       </div>
 
-      {/* Shift Card */}
-      <Card variant="borderless">
-        <Row gutter={[24, 24]}>
-          <Col xs={24} md={12}>
-            <Space orientation="vertical" size={4}>
-              <Tag color="blue" icon={<CalendarOutlined />}>
-                Today's Shift
+      {/* Attendance */}
+      <Card className="rounded-xl">
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-sm text-slate-500">Checked In At</div>
+
+            <div className="mt-1 text-2xl font-bold text-slate-800">
+              {formatTime(attendance?.checkIn || null)}
+            </div>
+
+            <div className="mt-2">
+              <Tag
+                color={
+                  attendance?.currentStatus === 'On Break'
+                    ? 'orange'
+                    : attendance?.currentStatus === 'Working'
+                      ? 'blue'
+                      : 'green'
+                }
+              >
+                {attendance?.currentStatus || 'Not Checked In'}
               </Tag>
+            </div>
+          </div>
 
-              <h2 className="text-2xl font-bold">{attendance.shift}</h2>
+          <div className="text-left md:text-right">
+            <div className="text-sm text-slate-500">Working Time</div>
 
-              <p className="text-slate-500">
-                {attendance.startTime} - {attendance.endTime}
-              </p>
-
-              <Tag color="green">{attendance.status}</Tag>
-            </Space>
-          </Col>
-
-          <Col xs={24} md={12}>
-            <Space orientation="vertical">
-              <span className="text-slate-500">Today's Date</span>
-              <strong>{attendance.date}</strong>
-
-              <span className="text-slate-500 mt-3">
-                <EnvironmentOutlined /> {attendance.location}
-              </span>
-            </Space>
-          </Col>
-        </Row>
+            <div className="mt-1 font-mono text-3xl font-bold text-green-600">{workingTime}</div>
+          </div>
+        </div>
       </Card>
 
-      {/* Statistics */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Check In"
-              value={attendance.checkIn ?? '--'}
-              prefix={<LoginOutlined />}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Check Out"
-              value={attendance.checkOut ?? '--'}
-              prefix={<LogoutOutlined />}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Working Hours"
-              value={attendance.workingHours}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Attendance Actions */}
-      <Card title="Today's Attendance">
-        {!attendance.checkIn ? (
-          <Button type="primary" size="large" icon={<LoginOutlined />}>
-            Check In
+      {/* Break Action */}
+      <Card title="Today's Attendance" className="rounded-xl">
+        {attendance?.currentStatus === 'On Break' ? (
+          <Button
+            type="primary"
+            danger
+            size="large"
+            icon={<PauseCircleOutlined />}
+            loading={loading}
+            onClick={handleBreakOff}
+          >
+            Break Off
           </Button>
-        ) : !attendance.checkOut ? (
-          <Space>
-            <Button icon={<CoffeeOutlined />} size="large">
-              Start Break
-            </Button>
-
-            <Button danger size="large" icon={<LogoutOutlined />}>
-              Check Out
-            </Button>
-          </Space>
+        ) : attendance?.currentStatus === 'Working' ? (
+          <Button
+            type="primary"
+            size="large"
+            icon={<PlayCircleOutlined />}
+            loading={loading}
+            onClick={handleTakeBreak}
+          >
+            Take Break
+          </Button>
         ) : (
-          <Tag color="success">Attendance Completed</Tag>
+          <Tag color="green">Attendance Completed</Tag>
         )}
       </Card>
 
       {/* Break History */}
-      <Card title="Today's Breaks">
-        <Timeline
-          items={[
-            {
-              color: 'gray',
-              content: 'No breaks recorded.',
-            },
-          ]}
-        />
-      </Card>
-
-      {/* Information */}
-      <Card title="Attendance Rules">
-        <ul className="list-disc pl-5 space-y-2 text-slate-600">
-          <li>Shift Time: 09:00 AM - 06:00 PM</li>
-          <li>Grace Time: 15 Minutes</li>
-          <li>Maximum Break: 60 Minutes</li>
-          <li>Late check-in after 09:15 AM.</li>
-          <li>Location must be within office premises.</li>
-        </ul>
-
-        <Divider />
-
-        <Alert
-          type="warning"
-          showIcon
-          title="Note"
-          description="This page currently uses dummy data. It will be connected to the Attendance, Roster and Shift APIs later."
-        />
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <CoffeeOutlined />
+            <span>Today's Breaks</span>
+          </div>
+        }
+        className="rounded-xl"
+      >
+        <Timeline items={timelineItems} />
       </Card>
     </div>
   );

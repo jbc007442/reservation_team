@@ -194,3 +194,11 @@
   border: 1px solid #d9d9d9;
   border-radius: 4px;
 }
+
+.roster-table .ant-table-thead > tr > th {
+  padding: 16px 24px !important;
+}
+
+.roster-table .ant-table-tbody > tr > td {
+  padding: 20px 24px !important;
+}

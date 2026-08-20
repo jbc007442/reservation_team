@@ -15,32 +15,18 @@ const RosterSchema = new Schema(
       index: true,
     },
 
-    shift: {
-      type: Types.ObjectId,
-      ref: 'Shift',
-      required: true,
-    },
-
-    isHoliday: {
-      type: Boolean,
-      default: false,
-    },
-
-    isWeeklyOff: {
-      type: Boolean,
-      default: false,
-    },
-
-    remarks: {
+    rosterStatus: {
       type: String,
-      default: '',
-      trim: true,
+      enum: ['P', 'WO', 'L', 'H', 'HD', 'A', 'OD', 'WFH'],
+      default: 'P',
+      required: true,
     },
 
     status: {
       type: String,
       enum: ['active', 'inactive'],
       default: 'active',
+      index: true,
     },
 
     createdBy: {
@@ -73,8 +59,5 @@ RosterSchema.index(
     unique: true,
   }
 );
-
-RosterSchema.index({ shift: 1 });
-RosterSchema.index({ status: 1 });
 
 export default models.Roster || model('Roster', RosterSchema);

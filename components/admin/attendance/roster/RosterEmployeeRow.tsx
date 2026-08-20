@@ -2,52 +2,64 @@
 
 import RosterCell from './RosterCell';
 
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
 interface Employee {
-  id: string;
+  _id: string;
+  employeeId: string;
   name: string;
+  email: string;
   department: string;
-  roster: {
-    mon: string;
-    tue: string;
-    wed: string;
-    thu: string;
-    fri: string;
-    sat: string;
-    sun: string;
-  };
+  designation: string;
+  avatar: string;
+  status: string;
+  roster: Record<DayKey, string>;
 }
 
 interface Props {
   employee: Employee;
-  onChange: (
-    employeeId: string,
-    day: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun',
-    value: string
-  ) => void;
+  index: number;
+  onChange: (employeeId: string, day: DayKey, value: string) => void;
 }
 
-export default function RosterEmployeeRow({ employee, onChange }: Props) {
+export default function RosterEmployeeRow({ employee, index, onChange }: Props) {
   return (
-    <tr className="transition-colors hover:bg-slate-50">
-      {/* Employee */}
-      <td className="sticky left-0 z-30 w-52 min-w-52 border-b border-slate-200 bg-white px-4 py-3 shadow-[2px_0_6px_rgba(0,0,0,0.04)]">
-        <div className="truncate font-medium text-slate-800">{employee.name}</div>
-
-        <div className="mt-1 text-xs text-slate-500">{employee.id}</div>
+    <tr className="group transition-colors hover:bg-slate-50">
+      {/* Number */}
+      <td className="sticky left-0 z-30 w-14 min-w-14 border-b border-slate-200 bg-white px-3 py-3 text-center group-hover:bg-slate-50">
+        <span className="text-sm font-medium text-slate-400">{index + 1}</span>
       </td>
 
-      {/* Department */}
-      <td className="sticky left-52 z-20 w-32 min-w-32 border-b border-slate-200 bg-white px-3 py-3 text-center shadow-[2px_0_6px_rgba(0,0,0,0.03)]">
-        <span className="inline-flex whitespace-nowrap rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-          {employee.department}
-        </span>
+      {/* Employee */}
+      <td className="sticky left-14 z-30 w-64 min-w-64 border-b border-slate-200 bg-white px-4 py-3 shadow-[2px_0_6px_rgba(0,0,0,0.04)] group-hover:bg-slate-50">
+        <div className="flex items-center gap-3">
+          {/* Avatar */}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+            {employee.avatar ? (
+              <img
+                src={employee.avatar}
+                alt={employee.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              employee.name?.charAt(0).toUpperCase() || '?'
+            )}
+          </div>
+
+          {/* Employee information */}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-800">{employee.name}</div>
+
+            <div className="mt-0.5 truncate text-xs text-slate-500">{employee.employeeId}</div>
+          </div>
+        </div>
       </td>
 
       {/* Monday */}
       <td className="w-16 min-w-16 border-b border-slate-200 px-1 py-2 text-center">
         <RosterCell
           value={employee.roster.mon}
-          onChange={(value) => onChange(employee.id, 'mon', value)}
+          onChange={(value) => onChange(employee._id, 'mon', value)}
         />
       </td>
 
@@ -55,7 +67,7 @@ export default function RosterEmployeeRow({ employee, onChange }: Props) {
       <td className="w-16 min-w-16 border-b border-slate-200 px-1 py-2 text-center">
         <RosterCell
           value={employee.roster.tue}
-          onChange={(value) => onChange(employee.id, 'tue', value)}
+          onChange={(value) => onChange(employee._id, 'tue', value)}
         />
       </td>
 
@@ -63,7 +75,7 @@ export default function RosterEmployeeRow({ employee, onChange }: Props) {
       <td className="w-16 min-w-16 border-b border-slate-200 px-1 py-2 text-center">
         <RosterCell
           value={employee.roster.wed}
-          onChange={(value) => onChange(employee.id, 'wed', value)}
+          onChange={(value) => onChange(employee._id, 'wed', value)}
         />
       </td>
 
@@ -71,7 +83,7 @@ export default function RosterEmployeeRow({ employee, onChange }: Props) {
       <td className="w-16 min-w-16 border-b border-slate-200 px-1 py-2 text-center">
         <RosterCell
           value={employee.roster.thu}
-          onChange={(value) => onChange(employee.id, 'thu', value)}
+          onChange={(value) => onChange(employee._id, 'thu', value)}
         />
       </td>
 
@@ -79,7 +91,7 @@ export default function RosterEmployeeRow({ employee, onChange }: Props) {
       <td className="w-16 min-w-16 border-b border-slate-200 px-1 py-2 text-center">
         <RosterCell
           value={employee.roster.fri}
-          onChange={(value) => onChange(employee.id, 'fri', value)}
+          onChange={(value) => onChange(employee._id, 'fri', value)}
         />
       </td>
 
@@ -87,7 +99,7 @@ export default function RosterEmployeeRow({ employee, onChange }: Props) {
       <td className="w-16 min-w-16 border-b border-slate-200 px-1 py-2 text-center">
         <RosterCell
           value={employee.roster.sat}
-          onChange={(value) => onChange(employee.id, 'sat', value)}
+          onChange={(value) => onChange(employee._id, 'sat', value)}
         />
       </td>
 
@@ -95,7 +107,7 @@ export default function RosterEmployeeRow({ employee, onChange }: Props) {
       <td className="w-16 min-w-16 border-b border-slate-200 px-1 py-2 text-center">
         <RosterCell
           value={employee.roster.sun}
-          onChange={(value) => onChange(employee.id, 'sun', value)}
+          onChange={(value) => onChange(employee._id, 'sun', value)}
         />
       </td>
     </tr>
