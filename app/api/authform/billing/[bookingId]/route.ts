@@ -11,6 +11,7 @@ export async function GET(
     await connectDB();
 
     const { bookingId } = await params;
+
     if (!mongoose.Types.ObjectId.isValid(bookingId)) {
       return NextResponse.json(
         {
@@ -22,6 +23,7 @@ export async function GET(
     }
 
     const authForm = await AuthForm.findOne({ bookingId }).lean();
+
     if (!authForm) {
       return NextResponse.json({
         success: true,
@@ -33,17 +35,26 @@ export async function GET(
       success: true,
       data: {
         bookingReferenceNo: authForm.bookingReferenceNo,
+
         customer: authForm.passengers?.[0],
-        charges: authForm.charges,
-        cards: authForm.cards,
+
+        // Merchant
+        merchant: authForm.merchant || '',
+
+        charges: authForm.charges || [],
+
+        cards: authForm.cards || [],
+
         billing: authForm.billing,
       },
     });
   } catch (error: any) {
+    console.error('Billing GET API Error:', error);
+
     return NextResponse.json(
       {
         success: false,
-        message: error.message,
+        message: error.message || 'Failed to fetch billing information.',
       },
       { status: 500 }
     );
@@ -72,6 +83,88 @@ export async function PATCH(
       );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | MERCHANT UPDATE
+    |--------------------------------------------------------------------------
+    */
+
+    if (body.merchant !== undefined) {
+      const validMerchants = [
+        'T1',
+        'T2',
+        'T3',
+        'T4',
+        'T5',
+        'T6',
+        'T7',
+        'T8',
+        'T9',
+        'T10',
+        'T11',
+        'T12',
+      ];
+
+      const merchant = String(body.merchant).trim();
+
+      if (!validMerchants.includes(merchant)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Invalid merchant.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const oldMerchant = authForm.merchant || null;
+
+      // merchant has been validated against validMerchants, cast to the specific union type
+      authForm.merchant = merchant as
+        | 'T1'
+        | 'T2'
+        | 'T3'
+        | 'T4'
+        | 'T5'
+        | 'T6'
+        | 'T7'
+        | 'T8'
+        | 'T9'
+        | 'T10'
+        | 'T11'
+        | 'T12'
+        | undefined;
+
+      /*
+       * Timeline
+       */
+      authForm.timeline.push({
+        action: 'Merchant Updated',
+        description: oldMerchant
+          ? `Merchant changed from ${oldMerchant} to ${merchant}`
+          : `Merchant assigned to ${merchant}`,
+        performedBy: body.userId || undefined,
+        source: 'staff',
+        createdAt: new Date(),
+      });
+
+      await authForm.save();
+
+      return NextResponse.json({
+        success: true,
+        message: `Merchant ${merchant} updated successfully.`,
+        data: {
+          merchant: authForm.merchant,
+        },
+      });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PAYMENT / CHARGE UPDATE
+    |--------------------------------------------------------------------------
+    */
+
     const chargeIndex = Number(body.chargeIndex);
 
     if (Number.isNaN(chargeIndex) || chargeIndex < 0 || chargeIndex >= authForm.charges.length) {
@@ -86,9 +179,11 @@ export async function PATCH(
 
     const transactionId = body.transactionId?.trim() || '';
 
-    // --------------------------------
-    // Validate duplicate Transaction ID
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Validate duplicate Transaction ID
+    |--------------------------------------------------------------------------
+    */
 
     if (transactionId) {
       const duplicateTransaction = authForm.charges.some(
@@ -108,21 +203,31 @@ export async function PATCH(
       }
     }
 
-    // --------------------------------
-    // Update Charge
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Update Charge
+    |--------------------------------------------------------------------------
+    */
 
     const charge: any = authForm.charges[chargeIndex];
+
     charge.transactionId = transactionId;
+
     charge.paymentStatus = transactionId ? 'Approved' : 'Pending';
+
     charge.paymentDate = transactionId ? new Date() : null;
+
     charge.verifiedAt = transactionId ? new Date() : null;
+
     charge.verifiedBy = transactionId ? body.userId || null : null;
+
     authForm.markModified('charges');
 
-    // --------------------------------
-    // Calculate totals
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Calculate Totals
+    |--------------------------------------------------------------------------
+    */
 
     const total = authForm.charges.reduce(
       (sum: number, charge: any) => sum + Number(charge.amount || 0),
@@ -133,23 +238,32 @@ export async function PATCH(
       .filter((charge: any) => charge.paymentStatus === 'Approved')
       .reduce((sum: number, charge: any) => sum + Number(charge.amount || 0), 0);
 
-    // --------------------------------
-    // Billing Status
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Billing Status
+    |--------------------------------------------------------------------------
+    */
 
-    authForm.billing.paymentStatus = approved === 0 ? 'pending' : approved === total ? 'paid' : 'partial';
+    authForm.billing.paymentStatus =
+      approved === 0 ? 'pending' : approved === total ? 'paid' : 'partial';
 
-    // --------------------------------
-    // Timeline
-    // --------------------------------
+    /*
+    |--------------------------------------------------------------------------
+    | Timeline
+    |--------------------------------------------------------------------------
+    */
 
     authForm.timeline.push({
       action: 'Payment Verification',
+
       description: transactionId
         ? `${charge.description} verified (${transactionId})`
         : `${charge.description} payment reset to pending`,
+
       performedBy: body.userId || undefined,
+
       source: 'staff',
+
       createdAt: new Date(),
     });
 
@@ -157,11 +271,13 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
+
       message: transactionId ? 'Payment updated successfully.' : 'Payment reset successfully.',
+
       data: authForm.charges,
     });
   } catch (error: any) {
-    console.error(error);
+    console.error('Billing PATCH API Error:', error);
 
     return NextResponse.json(
       {

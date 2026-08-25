@@ -1,25 +1,3 @@
-// import { NextResponse } from 'next/server';
-
-// export async function POST() {
-//   const response = NextResponse.json(
-//     {
-//       success: true,
-//       message: 'Logged out successfully.',
-//     },
-//     { status: 200 }
-//   );
-
-//   response.cookies.set('token', '', {
-//     httpOnly: true,
-//     secure: process.env.NODE_ENV === 'production',
-//     sameSite: 'lax',
-//     path: '/',
-//     expires: new Date(0),
-//   });
-
-//   return response;
-// }
-
 import dayjs from 'dayjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
@@ -40,9 +18,11 @@ export async function POST() {
     const token = cookieStore.get('token')?.value;
 
     /*
-     * Even if token is missing,
-     * still clear the cookie.
-     */
+    |--------------------------------------------------------------------------
+    | No Token
+    |--------------------------------------------------------------------------
+    */
+
     if (!token) {
       const response = NextResponse.json({
         success: true,
@@ -60,9 +40,21 @@ export async function POST() {
       return response;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Token
+    |--------------------------------------------------------------------------
+    */
+
     const payload = verifyToken(token);
 
     const user = await User.findById(payload.userId).select('_id role status').lean();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Employee Attendance
+    |--------------------------------------------------------------------------
+    */
 
     if (user && user.role !== 'admin') {
       const now = new Date();
@@ -72,8 +64,11 @@ export async function POST() {
       const endOfDay = dayjs(now).endOf('day').toDate();
 
       /*
-       * Find today's attendance
-       */
+      |--------------------------------------------------------------------------
+      | Find Today's Attendance
+      |--------------------------------------------------------------------------
+      */
+
       const attendance = await Attendance.findOne({
         employee: user._id,
 
@@ -85,36 +80,101 @@ export async function POST() {
 
       if (attendance) {
         /*
-         * Only checkout if currently working
-         * or on break.
-         */
-        if (attendance.currentStatus === 'Working' || attendance.currentStatus === 'On Break') {
-          /*
-           * If employee logs out while on break,
-           * consider the break ended at logout.
-           *
-           * For now, we calculate the working
-           * duration from check-in.
-           */
-          if (attendance.checkIn) {
-            const totalMinutes = Math.floor((now.getTime() - attendance.checkIn.getTime()) / 60000);
+        |--------------------------------------------------------------------------
+        | Determine Active Session
+        |--------------------------------------------------------------------------
+        |
+        | We check PM first because PM is the later session.
+        |
+        */
 
-            attendance.workingMinutes = Math.max(0, totalMinutes - attendance.breakMinutes);
+        let sessionName: 'am' | 'pm' | null = null;
+
+        if (
+          attendance.pm &&
+          (attendance.pm.currentStatus === 'Working' || attendance.pm.currentStatus === 'On Break')
+        ) {
+          sessionName = 'pm';
+        } else if (
+          attendance.am &&
+          (attendance.am.currentStatus === 'Working' || attendance.am.currentStatus === 'On Break')
+        ) {
+          sessionName = 'am';
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | No Active Session
+        |--------------------------------------------------------------------------
+        */
+
+        if (sessionName) {
+          const session = attendance[sessionName];
+
+          /*
+          |--------------------------------------------------------------------------
+          | Calculate Working Time
+          |--------------------------------------------------------------------------
+          */
+
+          if (session.checkIn) {
+            const totalMinutes = Math.floor((now.getTime() - session.checkIn.getTime()) / 60000);
+
+            session.workingMinutes = Math.max(0, totalMinutes - session.breakMinutes);
           }
 
-          attendance.checkOut = now;
+          /*
+          |--------------------------------------------------------------------------
+          | Checkout Session
+          |--------------------------------------------------------------------------
+          */
+
+          session.checkOut = now;
+
+          session.currentStatus = 'Checked Out';
+
+          session.lastActivityAt = now;
+
+          session.autoLoggedOut = false;
+
+          session.autoLogoutAt = null;
+
+          /*
+          |--------------------------------------------------------------------------
+          | Update Overall Attendance
+          |--------------------------------------------------------------------------
+          */
 
           attendance.currentStatus = 'Checked Out';
 
           attendance.lastActivityAt = now;
 
+          /*
+          | Calculate total working minutes
+          */
+
+          attendance.workingMinutes =
+            Number(attendance.am?.workingMinutes || 0) + Number(attendance.pm?.workingMinutes || 0);
+
+          /*
+          | Calculate total break minutes
+          */
+
+          attendance.breakMinutes =
+            Number(attendance.am?.breakMinutes || 0) + Number(attendance.pm?.breakMinutes || 0);
+
           attendance.updatedBy = user._id;
+
+          attendance.markModified(sessionName);
 
           await attendance.save();
 
           /*
-           * Attendance OUT log
-           */
+          |--------------------------------------------------------------------------
+          | Attendance OUT Log
+          |--------------------------------------------------------------------------
+          */
+
           await AttendanceLog.create({
             employee: user._id,
 
@@ -126,6 +186,8 @@ export async function POST() {
 
             source: 'Web',
 
+            remarks: `${sessionName.toUpperCase()} session checked out`,
+
             createdBy: user._id,
           });
         }
@@ -133,8 +195,11 @@ export async function POST() {
     }
 
     /*
-     * Clear login cookie
-     */
+    |--------------------------------------------------------------------------
+    | Clear Authentication Cookie
+    |--------------------------------------------------------------------------
+    */
+
     const response = NextResponse.json({
       success: true,
       message: 'Logged out successfully.',
@@ -153,9 +218,11 @@ export async function POST() {
     console.error('Logout API Error:', error);
 
     /*
-     * Even if attendance update fails,
-     * clear authentication cookie.
-     */
+    |--------------------------------------------------------------------------
+    | Always Clear Cookie
+    |--------------------------------------------------------------------------
+    */
+
     const response = NextResponse.json(
       {
         success: false,

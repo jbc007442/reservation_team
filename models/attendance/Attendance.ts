@@ -1,35 +1,13 @@
 import { Schema, model, models, Types } from 'mongoose';
 
-const AttendanceSchema = new Schema(
+/*
+|--------------------------------------------------------------------------
+| AM / PM Session
+|--------------------------------------------------------------------------
+*/
+
+const SessionSchema = new Schema(
   {
-    /*
-    |--------------------------------------------------------------------------
-    | Employee
-    |--------------------------------------------------------------------------
-    */
-    employee: {
-      type: Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
-
-    /*
-    |--------------------------------------------------------------------------
-    | Attendance Date
-    |--------------------------------------------------------------------------
-    | One attendance record per employee per day.
-    */
-    date: {
-      type: Date,
-      required: true,
-    },
-
-    /*
-    |--------------------------------------------------------------------------
-    | Check In / Check Out
-    |--------------------------------------------------------------------------
-    */
     checkIn: {
       type: Date,
       default: null,
@@ -40,23 +18,13 @@ const AttendanceSchema = new Schema(
       default: null,
     },
 
-    /*
-    |--------------------------------------------------------------------------
-    | Current Employee State
-    |--------------------------------------------------------------------------
-    */
     currentStatus: {
       type: String,
       enum: ['Working', 'On Break', 'Checked Out'],
-      default: 'Working',
+      default: 'Checked Out',
       index: true,
     },
 
-    /*
-    |--------------------------------------------------------------------------
-    | Last Activity
-    |--------------------------------------------------------------------------
-    */
     lastActivityAt: {
       type: Date,
       default: null,
@@ -68,6 +36,7 @@ const AttendanceSchema = new Schema(
     |--------------------------------------------------------------------------
     | Stored in minutes.
     */
+
     workingMinutes: {
       type: Number,
       default: 0,
@@ -78,8 +47,133 @@ const AttendanceSchema = new Schema(
     |--------------------------------------------------------------------------
     | Break Time
     |--------------------------------------------------------------------------
-    | Total break duration for the day in minutes.
     */
+
+    breakMinutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Automatic 10 Hour Logout
+    |--------------------------------------------------------------------------
+    */
+
+    autoLoggedOut: {
+      type: Boolean,
+      default: false,
+    },
+
+    autoLogoutAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| Attendance
+|--------------------------------------------------------------------------
+*/
+
+const AttendanceSchema = new Schema(
+  {
+    /*
+    |--------------------------------------------------------------------------
+    | Employee
+    |--------------------------------------------------------------------------
+    */
+
+    employee: {
+      type: Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Attendance Date
+    |--------------------------------------------------------------------------
+    */
+
+    date: {
+      type: Date,
+      required: true,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | AM Session
+    |--------------------------------------------------------------------------
+    */
+
+    am: {
+      type: SessionSchema,
+      default: () => ({}),
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | PM Session
+    |--------------------------------------------------------------------------
+    */
+
+    pm: {
+      type: SessionSchema,
+      default: () => ({}),
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Overall Current Employee State
+    |--------------------------------------------------------------------------
+    */
+
+    currentStatus: {
+      type: String,
+      enum: ['Working', 'On Break', 'Checked Out'],
+      default: 'Checked Out',
+      index: true,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Overall Last Activity
+    |--------------------------------------------------------------------------
+    */
+
+    lastActivityAt: {
+      type: Date,
+      default: null,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Total Working Time
+    |--------------------------------------------------------------------------
+    | AM + PM working minutes.
+    */
+
+    workingMinutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Total Break Time
+    |--------------------------------------------------------------------------
+    | AM + PM break minutes.
+    */
+
     breakMinutes: {
       type: Number,
       default: 0,
@@ -91,6 +185,7 @@ const AttendanceSchema = new Schema(
     | Attendance Status
     |--------------------------------------------------------------------------
     */
+
     status: {
       type: String,
       enum: ['Present', 'Absent', 'Half Day', 'Leave', 'Holiday', 'Weekly Off'],
@@ -103,6 +198,7 @@ const AttendanceSchema = new Schema(
     | Attendance Approval
     |--------------------------------------------------------------------------
     */
+
     approvedBy: {
       type: Types.ObjectId,
       ref: 'User',
@@ -119,6 +215,7 @@ const AttendanceSchema = new Schema(
     | Audit
     |--------------------------------------------------------------------------
     */
+
     createdBy: {
       type: Types.ObjectId,
       ref: 'User',
@@ -141,6 +238,7 @@ const AttendanceSchema = new Schema(
 | One Attendance Record Per Employee Per Day
 |--------------------------------------------------------------------------
 */
+
 AttendanceSchema.index(
   {
     employee: 1,
@@ -169,12 +267,22 @@ AttendanceSchema.index({
 
 AttendanceSchema.index({
   employee: 1,
-  checkIn: 1,
+  'am.checkIn': 1,
 });
 
 AttendanceSchema.index({
   employee: 1,
-  checkOut: 1,
+  'am.checkOut': 1,
+});
+
+AttendanceSchema.index({
+  employee: 1,
+  'pm.checkIn': 1,
+});
+
+AttendanceSchema.index({
+  employee: 1,
+  'pm.checkOut': 1,
 });
 
 AttendanceSchema.index({

@@ -47,10 +47,15 @@ const UserSchema = new Schema(
 
     role: {
       type: String,
-      enum: ['admin', 'employee'],
+      enum: ['admin', 'employee', 'accountant'],
       default: 'employee',
     },
 
+    permissions: {
+      type: [String],
+      default: [],
+    },
+    
     department: {
       type: String,
       default: '',

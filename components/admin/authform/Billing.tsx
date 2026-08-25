@@ -13,6 +13,7 @@ import {
   Descriptions,
   message,
   Segmented,
+  Select,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -65,6 +66,7 @@ export default function Billing({ booking }: BillingProps) {
   const [bookingInfo, setBookingInfo] = useState({
     bookingReferenceNo: '',
     customer: '',
+    merchant: '',
   });
 
   const [currentStatus, setCurrentStatus] = useState<string>(booking.status || '');
@@ -85,8 +87,11 @@ export default function Billing({ booking }: BillingProps) {
       // No AuthForm/Billing created yet
       if (!result.data) {
         setBookingInfo({
-          bookingReferenceNo: booking.bookingNo,
-          customer: '',
+          bookingReferenceNo: result.data.bookingReferenceNo || '',
+          customer: result.data.customer
+            ? `${result.data.customer.title} ${result.data.customer.firstName} ${result.data.customer.lastName}`
+            : '',
+          merchant: result.data.merchant || '',
         });
 
         setPayments([]);
@@ -100,6 +105,7 @@ export default function Billing({ booking }: BillingProps) {
         customer: result.data.customer
           ? `${result.data.customer.title} ${result.data.customer.firstName} ${result.data.customer.lastName}`
           : '',
+        merchant: result.data.merchant || '',
       });
 
       const rows: PaymentItem[] = (result.data.charges || []).map((charge: any, index: number) => ({
@@ -155,6 +161,41 @@ export default function Billing({ booking }: BillingProps) {
       message.success('Booking status updated.');
     } catch (err: any) {
       message.error(err.message);
+    }
+  };
+
+  const updateMerchant = async (merchant: string) => {
+    try {
+      const res = await fetch(`/api/authform/billing/${booking._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          merchant,
+          userId: user?._id,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Failed to update merchant.');
+      }
+
+      setBookingInfo((prev) => ({
+        ...prev,
+        merchant,
+      }));
+
+      message.success(`Merchant ${merchant} selected successfully.`);
+    } catch (error: any) {
+      console.error('Merchant update error:', error);
+
+      message.error(error.message || 'Failed to update merchant.');
+
+      // Reload database value
+      loadPayments();
     }
   };
 
@@ -337,6 +378,42 @@ export default function Billing({ booking }: BillingProps) {
           },
         ]}
       />
+
+      <Divider>Merchant</Divider>
+
+      <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-base font-semibold text-slate-800">Merchant Assignment</div>
+
+            <div className="mt-1 text-sm text-slate-500">
+              Select the merchant associated with this booking.
+            </div>
+          </div>
+
+          <Select
+            value={bookingInfo.merchant || undefined}
+            placeholder="Select Merchant"
+            size="large"
+            style={{ width: 200 }}
+            onChange={updateMerchant}
+            options={[
+              { label: 'T1', value: 'T1' },
+              { label: 'T2', value: 'T2' },
+              { label: 'T3', value: 'T3' },
+              { label: 'T4', value: 'T4' },
+              { label: 'T5', value: 'T5' },
+              { label: 'T6', value: 'T6' },
+              { label: 'T7', value: 'T7' },
+              { label: 'T8', value: 'T8' },
+              { label: 'T9', value: 'T9' },
+              { label: 'T10', value: 'T10' },
+              { label: 'T11', value: 'T11' },
+              { label: 'T12', value: 'T12' },
+            ]}
+          />
+        </div>
+      </div>
 
       <Divider>Card/Payment Information</Divider>
 

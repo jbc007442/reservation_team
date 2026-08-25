@@ -61,8 +61,10 @@ export async function POST(req: NextRequest) {
     const { attendanceId, type } = body;
 
     /*
-     * Validate type
-     */
+    |--------------------------------------------------------------------------
+    | Validate Type
+    |--------------------------------------------------------------------------
+    */
 
     if (!['BREAK_IN', 'BREAK_OUT'].includes(type)) {
       return NextResponse.json(
@@ -70,15 +72,15 @@ export async function POST(req: NextRequest) {
           success: false,
           message: 'Invalid break type.',
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     /*
-     * Find attendance
-     */
+    |--------------------------------------------------------------------------
+    | Find Attendance
+    |--------------------------------------------------------------------------
+    */
 
     let attendance;
 
@@ -88,13 +90,8 @@ export async function POST(req: NextRequest) {
         employee: user._id,
       });
     } else {
-      /*
-       * Fallback: today's attendance
-       */
-
       attendance = await Attendance.findOne({
         employee: user._id,
-
         date: {
           $gte: dayjs().startOf('day').toDate(),
           $lte: dayjs().endOf('day').toDate(),
@@ -108,70 +105,106 @@ export async function POST(req: NextRequest) {
           success: false,
           message: "Today's attendance record not found.",
         },
-        {
-          status: 404,
-        }
+        { status: 404 }
       );
     }
 
     /*
-     * Cannot break after checkout
-     */
+    |--------------------------------------------------------------------------
+    | Determine AM / PM Session
+    |--------------------------------------------------------------------------
+    |
+    | Find the session that is currently active.
+    |
+    */
 
-    if (attendance.currentStatus === 'Checked Out') {
+    const now = new Date();
+
+    let sessionName: 'am' | 'pm' | null = null;
+
+    if (attendance.am?.currentStatus === 'Working' || attendance.am?.currentStatus === 'On Break') {
+      sessionName = 'am';
+    } else if (
+      attendance.pm?.currentStatus === 'Working' ||
+      attendance.pm?.currentStatus === 'On Break'
+    ) {
+      sessionName = 'pm';
+    }
+
+    if (!sessionName) {
       return NextResponse.json(
         {
           success: false,
-          message: 'Attendance is already checked out.',
+          message: 'No active AM or PM attendance session found.',
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     /*
-     * BREAK IN
-     */
+    |--------------------------------------------------------------------------
+    | Active Session
+    |--------------------------------------------------------------------------
+    */
+
+    const session = attendance[sessionName];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cannot Break After Checkout
+    |--------------------------------------------------------------------------
+    */
+
+    if (session.currentStatus === 'Checked Out') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `${sessionName.toUpperCase()} session is already checked out.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BREAK IN
+    |--------------------------------------------------------------------------
+    */
 
     if (type === 'BREAK_IN') {
       /*
-       * Already on break
-       */
+      | Already on break
+      */
 
-      if (attendance.currentStatus === 'On Break') {
+      if (session.currentStatus === 'On Break') {
         return NextResponse.json(
           {
             success: false,
             message: 'You are already on break.',
           },
-          {
-            status: 400,
-          }
+          { status: 400 }
         );
       }
 
       /*
-       * Must be working
-       */
+      | Must be working
+      */
 
-      if (attendance.currentStatus !== 'Working') {
+      if (session.currentStatus !== 'Working') {
         return NextResponse.json(
           {
             success: false,
             message: 'You cannot start a break right now.',
           },
-          {
-            status: 400,
-          }
+          { status: 400 }
         );
       }
 
-      const now = new Date();
-
       /*
-       * Create break log
-       */
+      |--------------------------------------------------------------------------
+      | Create BREAK_IN Log
+      |--------------------------------------------------------------------------
+      */
 
       await AttendanceLog.create({
         employee: user._id,
@@ -185,53 +218,63 @@ export async function POST(req: NextRequest) {
         source: 'Web',
 
         createdBy: user._id,
+
+        remarks: `${sessionName.toUpperCase()} break started`,
       });
 
       /*
-       * Update attendance
-       */
+      |--------------------------------------------------------------------------
+      | Update Session
+      |--------------------------------------------------------------------------
+      */
 
-      attendance.currentStatus = 'On Break';
+      session.currentStatus = 'On Break';
 
-      attendance.lastActivityAt = now;
+      session.lastActivityAt = now;
 
       attendance.updatedBy = user._id;
+
+      attendance.markModified(sessionName);
 
       await attendance.save();
 
       return NextResponse.json({
         success: true,
 
-        message: 'Break started successfully.',
+        message: `${sessionName.toUpperCase()} break started successfully.`,
+
+        session: sessionName,
 
         data: attendance,
       });
     }
 
     /*
-     * BREAK OUT
-     */
+    |--------------------------------------------------------------------------
+    | BREAK OUT
+    |--------------------------------------------------------------------------
+    */
 
     if (type === 'BREAK_OUT') {
       /*
-       * Must currently be on break
-       */
+      | Must currently be on break
+      */
 
-      if (attendance.currentStatus !== 'On Break') {
+      if (session.currentStatus !== 'On Break') {
         return NextResponse.json(
           {
             success: false,
             message: 'You are not currently on break.',
           },
-          {
-            status: 400,
-          }
+          { status: 400 }
         );
       }
 
       /*
-       * Find latest BREAK_IN
-       */
+      |--------------------------------------------------------------------------
+      | Find Latest BREAK_IN
+      |--------------------------------------------------------------------------
+      */
 
       const breakIn = await AttendanceLog.findOne({
         employee: user._id,
@@ -251,29 +294,25 @@ export async function POST(req: NextRequest) {
             success: false,
             message: 'Active break record not found.',
           },
-          {
-            status: 400,
-          }
+          { status: 400 }
         );
       }
 
-      const now = new Date();
+      /*
+      |--------------------------------------------------------------------------
+      | Calculate Break Duration
+      |--------------------------------------------------------------------------
+      */
+
+      const breakMilliseconds = now.getTime() - new Date(breakIn.dateTime).getTime();
+
+      const breakMinutes = Math.max(0, Math.floor(breakMilliseconds / 60000));
 
       /*
-       * Calculate break duration
-       */
-
-      const breakMilliseconds =
-        now.getTime() - breakIn.dateTime.getTime();
-
-      const breakMinutes = Math.max(
-        0,
-        Math.floor(breakMilliseconds / 60000)
-      );
-
-      /*
-       * Create BREAK_OUT log
-       */
+      |--------------------------------------------------------------------------
+      | Create BREAK_OUT Log
+      |--------------------------------------------------------------------------
+      */
 
       await AttendanceLog.create({
         employee: user._id,
@@ -287,27 +326,34 @@ export async function POST(req: NextRequest) {
         source: 'Web',
 
         createdBy: user._id,
+
+        remarks: `${sessionName.toUpperCase()} break ended`,
       });
 
       /*
-       * Update attendance
-       */
+      |--------------------------------------------------------------------------
+      | Update Session
+      |--------------------------------------------------------------------------
+      */
 
-      attendance.currentStatus = 'Working';
+      session.currentStatus = 'Working';
 
-      attendance.lastActivityAt = now;
+      session.lastActivityAt = now;
 
-      attendance.breakMinutes =
-        (attendance.breakMinutes || 0) + breakMinutes;
+      session.breakMinutes = Number(session.breakMinutes || 0) + breakMinutes;
 
       attendance.updatedBy = user._id;
+
+      attendance.markModified(sessionName);
 
       await attendance.save();
 
       return NextResponse.json({
         success: true,
 
-        message: 'Break ended successfully.',
+        message: `${sessionName.toUpperCase()} break ended successfully.`,
+
+        session: sessionName,
 
         data: attendance,
 
@@ -315,40 +361,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Invalid Request
+    |--------------------------------------------------------------------------
+    */
+
     return NextResponse.json(
       {
         success: false,
         message: 'Invalid request.',
       },
-      {
-        status: 400,
-      }
+      { status: 400 }
     );
   } catch (error) {
     console.error('Attendance Break API Error:', error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to update break.';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to update break.';
 
     const status =
-      message === 'Unauthorized.'
+      errorMessage === 'Unauthorized.'
         ? 401
-        : message === 'User not found.'
+        : errorMessage === 'User not found.'
           ? 401
-          : message === 'User account is inactive.'
+          : errorMessage === 'User account is inactive.'
             ? 403
             : 500;
 
     return NextResponse.json(
       {
         success: false,
-        message,
+        message: errorMessage,
       },
-      {
-        status,
-      }
+      { status }
     );
   }
 }

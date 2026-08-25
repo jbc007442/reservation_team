@@ -2,10 +2,17 @@ import { Schema, model, models, Document } from 'mongoose';
 
 export interface IDpr extends Document {
   date: Date;
+
   agentName: string;
-  callType: 'buffer_call' | 'ppc' | 'existing' | 'expedia';
+
+  callType: 'buffer_call' | 'ppc' | 'existing' | 'expedia' | 'meta';
+
+  meta?: string;
+
   phoneNumber: string;
+
   airline: string;
+
   callQuery:
     | 'changes'
     | 'cancellation'
@@ -19,6 +26,7 @@ export interface IDpr extends Document {
     | 'no_voice'
     | 'junk_call_spam_blank_wrong_number'
     | 'flight_information';
+
   notes: string;
 
   createdBy?: Schema.Types.ObjectId;
@@ -45,7 +53,13 @@ const DprSchema = new Schema<IDpr>(
     callType: {
       type: String,
       required: true,
-      enum: ['buffer_call', 'ppc', 'existing', 'expedia'],
+      enum: ['buffer_call', 'ppc', 'existing', 'expedia', 'meta'],
+    },
+
+    meta: {
+      type: String,
+      trim: true,
+      default: null,
     },
 
     phoneNumber: {

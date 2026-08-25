@@ -1,9 +1,11 @@
+import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import dayjs from 'dayjs';
 
 import { verifyToken } from '@/lib/jwt';
 import { connectDB } from '@/lib/mongodb';
 
-import Attendance from '@/models/attendance/Attendance';
+import AttendanceLog from '@/models/attendance/AttendanceLog';
 import User from '@/models/user/User';
 
 export async function GET(req: NextRequest) {
@@ -16,7 +18,7 @@ export async function GET(req: NextRequest) {
     |--------------------------------------------------------------------------
     */
 
-    const cookieStore = await (await import('next/headers')).cookies();
+    const cookieStore = await cookies();
 
     const token = cookieStore.get('token')?.value;
 
@@ -64,29 +66,23 @@ export async function GET(req: NextRequest) {
 
     const search = searchParams.get('search')?.trim() || '';
 
-    const status = searchParams.get('status') || '';
-
     const date = searchParams.get('date') || '';
 
     /*
     |--------------------------------------------------------------------------
-    | Date Range
+    | Date
     |--------------------------------------------------------------------------
     */
 
-    const selectedDate = date ? new Date(date) : new Date();
+    const selectedDate = date ? dayjs(date) : dayjs();
 
-    const startDate = new Date(selectedDate);
+    const startDate = selectedDate.startOf('day').toDate();
 
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(selectedDate);
-
-    endDate.setHours(23, 59, 59, 999);
+    const endDate = selectedDate.endOf('day').toDate();
 
     /*
     |--------------------------------------------------------------------------
-    | Employee Search
+    | Find Employees
     |--------------------------------------------------------------------------
     */
 
@@ -124,7 +120,7 @@ export async function GET(req: NextRequest) {
         .select('_id')
         .lean();
 
-      employeeIds = employees.map((item) => item._id.toString());
+      employeeIds = employees.map((employee) => employee._id.toString());
 
       if (employeeIds.length === 0) {
         return NextResponse.json({
@@ -137,45 +133,23 @@ export async function GET(req: NextRequest) {
 
     /*
     |--------------------------------------------------------------------------
-    | Attendance Filter
+    | Attendance Logs
     |--------------------------------------------------------------------------
+    |
+    | We only need BREAK_IN and BREAK_OUT logs.
+    |
     */
 
     const filter: Record<string, unknown> = {
-      date: {
+      type: {
+        $in: ['BREAK_IN', 'BREAK_OUT'],
+      },
+
+      dateTime: {
         $gte: startDate,
         $lte: endDate,
       },
     };
-
-    /*
-    |--------------------------------------------------------------------------
-    | Status Filter
-    |--------------------------------------------------------------------------
-    |
-    | Status can exist in either AM or PM session.
-    |
-    */
-
-    if (status && status !== 'All') {
-      filter.$or = [
-        {
-          'am.currentStatus': status,
-        },
-        {
-          'pm.currentStatus': status,
-        },
-        {
-          status: status,
-        },
-      ];
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Employee Filter
-    |--------------------------------------------------------------------------
-    */
 
     if (employeeIds.length > 0) {
       filter.employee = {
@@ -185,19 +159,123 @@ export async function GET(req: NextRequest) {
 
     /*
     |--------------------------------------------------------------------------
-    | Fetch Attendance
+    | Fetch Logs
     |--------------------------------------------------------------------------
     */
 
-    const attendance = await Attendance.find(filter)
+    const logs = await AttendanceLog.find(filter)
       .populate({
         path: 'employee',
-        select: '_id employeeId name email department designation avatar',
+        select: '_id employeeId name email department designation',
       })
       .sort({
-        date: -1,
+        dateTime: 1,
       })
       .lean();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Build Break Sessions
+    |--------------------------------------------------------------------------
+    */
+
+    const breaks: any[] = [];
+
+    const activeBreaks = new Map<string, any>();
+
+    for (const log of logs) {
+      const employeeId = log.employee?._id?.toString();
+
+      if (!employeeId) {
+        continue;
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Session
+      |--------------------------------------------------------------------------
+      |
+      | Before 12 PM = AM
+      | 12 PM onward = PM
+      |
+      */
+
+      const session = dayjs(log.dateTime).hour() < 12 ? 'AM' : 'PM';
+
+      /*
+      |--------------------------------------------------------------------------
+      | BREAK IN
+      |--------------------------------------------------------------------------
+      */
+
+      if (log.type === 'BREAK_IN') {
+        const key = `${employeeId}-${log.attendance.toString()}`;
+
+        activeBreaks.set(key, {
+          key,
+
+          attendanceId: log.attendance.toString(),
+
+          employee: log.employee,
+
+          session,
+
+          breakIn: log.dateTime,
+
+          breakOut: null,
+
+          durationMinutes: 0,
+
+          status: 'Active',
+        });
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | BREAK OUT
+      |--------------------------------------------------------------------------
+      */
+
+      if (log.type === 'BREAK_OUT') {
+        const key = `${employeeId}-${log.attendance.toString()}`;
+
+        const activeBreak = activeBreaks.get(key);
+
+        if (activeBreak) {
+          const durationMinutes = Math.max(
+            0,
+            Math.floor((log.dateTime.getTime() - activeBreak.breakIn.getTime()) / 60000)
+          );
+
+          activeBreak.breakOut = log.dateTime;
+
+          activeBreak.durationMinutes = durationMinutes;
+
+          activeBreak.status = 'Completed';
+
+          breaks.push(activeBreak);
+
+          activeBreaks.delete(key);
+        }
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Add Active Breaks
+    |--------------------------------------------------------------------------
+    */
+
+    for (const activeBreak of activeBreaks.values()) {
+      const durationMinutes = Math.max(
+        0,
+        Math.floor((Date.now() - activeBreak.breakIn.getTime()) / 60000)
+      );
+
+      activeBreak.durationMinutes = durationMinutes;
+
+      breaks.push(activeBreak);
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -205,68 +283,24 @@ export async function GET(req: NextRequest) {
     |--------------------------------------------------------------------------
     */
 
-    const data = attendance.map((item: any) => ({
-      _id: item._id,
+    const data = breaks.map((item) => ({
+      key: `${item.attendanceId}-${item.breakIn.getTime()}`,
 
-      employee: item.employee,
+      employeeId: item.employee?.employeeId || '--',
 
-      date: item.date,
+      employeeName: item.employee?.name || '--',
 
-      /*
-      |--------------------------------------------------------------------------
-      | AM Session
-      |--------------------------------------------------------------------------
-      */
+      email: item.employee?.email || '--',
 
-      am: {
-        checkIn: item.am?.checkIn || null,
+      session: item.session,
 
-        checkOut: item.am?.checkOut || null,
+      breakIn: item.breakIn,
 
-        currentStatus: item.am?.currentStatus || 'Checked Out',
+      breakOut: item.breakOut,
 
-        lastActivityAt: item.am?.lastActivityAt || null,
-
-        workingMinutes: item.am?.workingMinutes || 0,
-
-        breakMinutes: item.am?.breakMinutes || 0,
-
-        autoLogoutAt: item.am?.autoLogoutAt || null,
-      },
-
-      /*
-      |--------------------------------------------------------------------------
-      | PM Session
-      |--------------------------------------------------------------------------
-      */
-
-      pm: {
-        checkIn: item.pm?.checkIn || null,
-
-        checkOut: item.pm?.checkOut || null,
-
-        currentStatus: item.pm?.currentStatus || 'Checked Out',
-
-        lastActivityAt: item.pm?.lastActivityAt || null,
-
-        workingMinutes: item.pm?.workingMinutes || 0,
-
-        breakMinutes: item.pm?.breakMinutes || 0,
-
-        autoLogoutAt: item.pm?.autoLogoutAt || null,
-      },
-
-      /*
-      |--------------------------------------------------------------------------
-      | Overall Attendance
-      |--------------------------------------------------------------------------
-      */
+      durationMinutes: item.durationMinutes || 0,
 
       status: item.status,
-
-      createdAt: item.createdAt,
-
-      updatedAt: item.updatedAt,
     }));
 
     /*
@@ -285,13 +319,13 @@ export async function GET(req: NextRequest) {
       date: startDate,
     });
   } catch (error) {
-    console.error('Daily Attendance GET API Error:', error);
+    console.error('Break Report GET API Error:', error);
 
     return NextResponse.json(
       {
         success: false,
 
-        message: error instanceof Error ? error.message : 'Failed to fetch daily attendance.',
+        message: error instanceof Error ? error.message : 'Failed to fetch break report.',
       },
       {
         status: 500,

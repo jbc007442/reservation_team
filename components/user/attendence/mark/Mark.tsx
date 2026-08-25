@@ -11,17 +11,39 @@ interface BreakRecord {
   end: string | null;
 }
 
-interface TodayAttendance {
-  _id: string;
+type SessionStatus = 'Working' | 'On Break' | 'Checked Out';
+
+interface AttendanceSession {
   checkIn: string | null;
   checkOut: string | null;
-  currentStatus: 'Working' | 'On Break' | 'Checked Out';
+
+  currentStatus: SessionStatus;
+
+  lastActivityAt: string | null;
+
   workingMinutes: number;
+
   breakMinutes: number;
+
+  autoLogoutAt?: string | null;
 }
+
+interface TodayAttendance {
+  _id: string;
+
+  am: AttendanceSession;
+
+  pm: AttendanceSession;
+
+  status: 'Present' | 'Absent' | 'Half Day' | 'Leave' | 'Holiday' | 'Weekly Off';
+}
+
+type SessionType = 'am' | 'pm';
 
 export default function Mark() {
   const [attendance, setAttendance] = useState<TodayAttendance | null>(null);
+
+  const [session, setSession] = useState<SessionType | null>(null);
 
   const [breaks, setBreaks] = useState<BreakRecord[]>([]);
 
@@ -30,8 +52,11 @@ export default function Mark() {
   const [loading, setLoading] = useState(false);
 
   /*
-   * Live clock
-   */
+  |--------------------------------------------------------------------------
+  | Live Clock
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -41,8 +66,25 @@ export default function Mark() {
   }, []);
 
   /*
-   * Fetch today's attendance
-   */
+  |--------------------------------------------------------------------------
+  | Current AM / PM Session
+  |--------------------------------------------------------------------------
+  */
+
+  const currentSession = useMemo(() => {
+    if (!attendance || !session) {
+      return null;
+    }
+
+    return attendance[session];
+  }, [attendance, session]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Fetch Today's Attendance
+  |--------------------------------------------------------------------------
+  */
+
   const fetchAttendance = async () => {
     try {
       setLoading(true);
@@ -59,10 +101,8 @@ export default function Mark() {
 
       setAttendance(result.data || null);
 
-      /*
-       * If your API also returns logs,
-       * populate breaks here.
-       */
+      setSession(result.session || null);
+
       setBreaks(result.breaks || []);
     } catch (error) {
       console.error('Attendance fetch error:', error);
@@ -71,13 +111,22 @@ export default function Mark() {
     }
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Initial Load
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
     fetchAttendance();
   }, []);
 
   /*
-   * Format time
-   */
+  |--------------------------------------------------------------------------
+  | Format Time
+  |--------------------------------------------------------------------------
+  */
+
   const formatTime = (value: string | Date | null) => {
     if (!value) {
       return '--';
@@ -87,22 +136,22 @@ export default function Mark() {
   };
 
   /*
-   * Working timer
-   *
-   * Before checkout:
-   * check-in → current time
-   *
-   * After checkout:
-   * check-in → checkout
-   */
+  |--------------------------------------------------------------------------
+  | Working Timer
+  |--------------------------------------------------------------------------
+  |
+  | Only calculate the CURRENT AM/PM session.
+  |
+  */
+
   const workingTime = useMemo(() => {
-    if (!attendance?.checkIn) {
+    if (!currentSession?.checkIn) {
       return '00:00:00';
     }
 
-    const start = dayjs(attendance.checkIn);
+    const start = dayjs(currentSession.checkIn);
 
-    const end = attendance.checkOut ? dayjs(attendance.checkOut) : dayjs(currentTime);
+    const end = currentSession.checkOut ? dayjs(currentSession.checkOut) : dayjs(currentTime);
 
     const seconds = Math.max(0, end.diff(start, 'second'));
 
@@ -117,17 +166,24 @@ export default function Mark() {
       String(minutes).padStart(2, '0'),
       String(remainingSeconds).padStart(2, '0'),
     ].join(':');
-  }, [attendance, currentTime]);
+  }, [currentSession, currentTime]);
 
   /*
-   * Take Break
-   */
+  |--------------------------------------------------------------------------
+  | Take Break
+  |--------------------------------------------------------------------------
+  */
+
   const handleTakeBreak = async () => {
-    if (!attendance?._id) {
+    if (!attendance?._id || !currentSession) {
       return;
     }
 
-    if (attendance.currentStatus === 'On Break') {
+    if (currentSession.currentStatus === 'On Break') {
+      return;
+    }
+
+    if (currentSession.currentStatus !== 'Working') {
       return;
     }
 
@@ -162,14 +218,17 @@ export default function Mark() {
   };
 
   /*
-   * Break Off
-   */
+  |--------------------------------------------------------------------------
+  | Break Off
+  |--------------------------------------------------------------------------
+  */
+
   const handleBreakOff = async () => {
-    if (!attendance?._id) {
+    if (!attendance?._id || !currentSession) {
       return;
     }
 
-    if (attendance.currentStatus !== 'On Break') {
+    if (currentSession.currentStatus !== 'On Break') {
       return;
     }
 
@@ -204,98 +263,153 @@ export default function Mark() {
   };
 
   /*
-   * Timeline
-   */
+  |--------------------------------------------------------------------------
+  | Status Color
+  |--------------------------------------------------------------------------
+  */
+
+  const statusColor = useMemo(() => {
+    if (!currentSession) {
+      return 'default';
+    }
+
+    switch (currentSession.currentStatus) {
+      case 'Working':
+        return 'blue';
+
+      case 'On Break':
+        return 'orange';
+
+      case 'Checked Out':
+        return 'green';
+
+      default:
+        return 'default';
+    }
+  }, [currentSession]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Timeline
+  |--------------------------------------------------------------------------
+  */
+
   const timelineItems = [
     ...breaks.map((item) => ({
-      color: 'green',
+      color: item.end ? 'green' : 'orange',
 
-      dot: <CoffeeOutlined />,
+      dot: item.end ? <CoffeeOutlined /> : <PauseCircleOutlined />,
 
-      content: (
+      children: (
         <div>
-          <div className="font-medium text-slate-700">Break</div>
+          <div className="font-medium text-slate-700">
+            {item.end ? 'Break' : 'Break in Progress'}
+          </div>
 
           <div className="text-sm text-slate-500">
-            {formatTime(item.start)} {item.end ? `- ${formatTime(item.end)}` : ''}
+            {formatTime(item.start)}
+
+            {item.end ? ` - ${formatTime(item.end)}` : ''}
           </div>
         </div>
       ),
     })),
 
-    ...(attendance?.currentStatus === 'On Break'
-      ? [
-          {
-            color: 'orange',
-
-            dot: <PauseCircleOutlined />,
-
-            content: (
-              <div>
-                <div className="font-medium text-orange-600">Break in Progress</div>
-
-                <div className="text-sm text-slate-500">Break is currently active</div>
-              </div>
-            ),
-          },
-        ]
-      : []),
-
-    ...(breaks.length === 0 && attendance?.currentStatus !== 'On Break'
+    ...(breaks.length === 0
       ? [
           {
             color: 'gray',
-            content: 'No breaks recorded.',
+
+            children: <span className="text-slate-500">No breaks recorded for this session.</span>,
           },
         ]
       : []),
   ];
 
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
+
       <div>
         <h1 className="text-3xl font-bold">Mark Attendance</h1>
 
-        <p className="text-slate-500">Manage your breaks and track today's working hours.</p>
+        <p className="text-slate-500">Manage your breaks and track your working hours.</p>
       </div>
 
-      {/* Attendance */}
+      {/* Session */}
+
       <Card className="rounded-xl">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-sm text-slate-500">Checked In At</div>
+        <div className="flex flex-col gap-6">
+          {/* Session Header */}
 
-            <div className="mt-1 text-2xl font-bold text-slate-800">
-              {formatTime(attendance?.checkIn || null)}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm text-slate-500">Current Session</div>
+
+              <div className="mt-1 text-2xl font-bold uppercase text-slate-800">
+                {session || '--'}
+              </div>
             </div>
 
-            <div className="mt-2">
-              <Tag
-                color={
-                  attendance?.currentStatus === 'On Break'
-                    ? 'orange'
-                    : attendance?.currentStatus === 'Working'
-                      ? 'blue'
-                      : 'green'
-                }
-              >
-                {attendance?.currentStatus || 'Not Checked In'}
-              </Tag>
-            </div>
+            <Tag color={statusColor} className="w-fit">
+              {currentSession?.currentStatus || 'Not Checked In'}
+            </Tag>
           </div>
 
-          <div className="text-left md:text-right">
-            <div className="text-sm text-slate-500">Working Time</div>
+          {/* Session Information */}
 
-            <div className="mt-1 font-mono text-3xl font-bold text-green-600">{workingTime}</div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Check In */}
+
+            <div>
+              <div className="text-sm text-slate-500">Check In</div>
+
+              <div className="mt-1 text-2xl font-bold text-slate-800">
+                {formatTime(currentSession?.checkIn || null)}
+              </div>
+            </div>
+
+            {/* Check Out */}
+
+            <div>
+              <div className="text-sm text-slate-500">Check Out</div>
+
+              <div className="mt-1 text-2xl font-bold text-slate-800">
+                {formatTime(currentSession?.checkOut || null)}
+              </div>
+            </div>
+
+            {/* Working Time */}
+
+            <div>
+              <div className="text-sm text-slate-500">Working Time</div>
+
+              <div className="mt-1 font-mono text-3xl font-bold text-green-600">{workingTime}</div>
+            </div>
           </div>
         </div>
       </Card>
 
       {/* Break Action */}
-      <Card title="Today's Attendance" className="rounded-xl">
-        {attendance?.currentStatus === 'On Break' ? (
+
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <CoffeeOutlined />
+            <span>{session?.toUpperCase() || '--'} Session</span>
+          </div>
+        }
+        className="rounded-xl"
+      >
+        {!currentSession ? (
+          <Tag color="default">Attendance not available</Tag>
+        ) : currentSession.currentStatus === 'On Break' ? (
           <Button
             type="primary"
             danger
@@ -306,7 +420,7 @@ export default function Mark() {
           >
             Break Off
           </Button>
-        ) : attendance?.currentStatus === 'Working' ? (
+        ) : currentSession.currentStatus === 'Working' ? (
           <Button
             type="primary"
             size="large"
@@ -317,16 +431,18 @@ export default function Mark() {
             Take Break
           </Button>
         ) : (
-          <Tag color="green">Attendance Completed</Tag>
+          <Tag color="green">{session?.toUpperCase()} Session Completed</Tag>
         )}
       </Card>
 
       {/* Break History */}
+
       <Card
         title={
           <div className="flex items-center gap-2">
             <CoffeeOutlined />
-            <span>Today's Breaks</span>
+
+            <span>{session?.toUpperCase() || '--'} Session Breaks</span>
           </div>
         }
         className="rounded-xl"

@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Button, Card, Space, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 
-import BookingDialog from '@/components/admin/booking/BookingDialog';
-import BookingTable from '@/components/admin/booking/BookingTable';
+import BookingDialog from '@/components/user/booking/BookingDialog';
+import BookingTable from '@/components/user/booking/BookingTable';
 
 import { Booking } from '@/components/user/booking/types';
 

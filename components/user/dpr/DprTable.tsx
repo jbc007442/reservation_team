@@ -4,6 +4,7 @@ import { Button, Popconfirm, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+
 import type { DprData } from './DprForm';
 
 interface DprTableProps {
@@ -37,10 +38,23 @@ export default function DprTable({ data, onEdit, onDelete }: DprTableProps) {
           ppc: 'PPC',
           existing: 'EXISTING',
           expedia: 'EXPEDIA',
+          meta: 'META',
         };
 
-        return <Tag>{labels[value] || value}</Tag>;
+        return <Tag color={value === 'meta' ? 'blue' : undefined}>{labels[value] || value}</Tag>;
       },
+    },
+
+    {
+      title: 'Meta',
+      dataIndex: 'meta',
+      key: 'meta',
+      render: (value: string, record: DprData) =>
+        record.callType === 'meta' ? (
+          <span className="font-medium text-slate-700">{value || '-'}</span>
+        ) : (
+          '-'
+        ),
     },
 
     {
@@ -59,7 +73,7 @@ export default function DprTable({ data, onEdit, onDelete }: DprTableProps) {
       title: 'Call Query',
       dataIndex: 'callQuery',
       key: 'callQuery',
-      render: (value: string) => value.replace(/_/g, ' ').toUpperCase(),
+      render: (value: string) => (value ? value.replace(/_/g, ' ').toUpperCase() : '-'),
     },
 
     {
@@ -75,6 +89,7 @@ export default function DprTable({ data, onEdit, onDelete }: DprTableProps) {
       fixed: 'right',
       width: 100,
       align: 'center',
+
       render: (_, record) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => onEdit(record)} />
@@ -102,7 +117,7 @@ export default function DprTable({ data, onEdit, onDelete }: DprTableProps) {
       rowKey="_id"
       columns={columns}
       dataSource={data}
-      scroll={{ x: 1100 }}
+      scroll={{ x: 1200 }}
       pagination={{
         pageSize: 10,
       }}

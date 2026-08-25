@@ -9,12 +9,6 @@ import Attendance from '@/models/attendance/Attendance';
 import AttendanceLog from '@/models/attendance/AttendanceLog';
 import User from '@/models/user/User';
 
-/*
-|--------------------------------------------------------------------------
-| Authentication
-|--------------------------------------------------------------------------
-*/
-
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
 
@@ -41,14 +35,6 @@ async function getAuthenticatedUser() {
   return user;
 }
 
-/*
-|--------------------------------------------------------------------------
-| GET
-|--------------------------------------------------------------------------
-| Get today's attendance + break history
-|--------------------------------------------------------------------------
-*/
-
 export async function GET() {
   try {
     await connectDB();
@@ -56,18 +42,10 @@ export async function GET() {
     const user = await getAuthenticatedUser();
 
     const startOfDay = dayjs().startOf('day').toDate();
-
     const endOfDay = dayjs().endOf('day').toDate();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Find today's attendance
-    |--------------------------------------------------------------------------
-    */
 
     const attendance = await Attendance.findOne({
       employee: user._id,
-
       date: {
         $gte: startOfDay,
         $lte: endOfDay,
@@ -79,29 +57,39 @@ export async function GET() {
       })
       .lean();
 
-    /*
-    |--------------------------------------------------------------------------
-    | No attendance yet
-    |--------------------------------------------------------------------------
-    */
-
     if (!attendance) {
       return NextResponse.json({
         success: true,
         data: null,
+        session: null,
         breaks: [],
       });
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Get attendance logs
+    | Determine current session
+    |--------------------------------------------------------------------------
+    |
+    | Before 12 PM  -> AM
+    | 12 PM onward  -> PM
+    |
+    */
+
+    const currentHour = dayjs().hour();
+
+    const session = currentHour < 12 ? 'am' : 'pm';
+
+    const currentSession = session === 'am' ? attendance.am : attendance.pm;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get logs for current session
     |--------------------------------------------------------------------------
     */
 
     const logs = await AttendanceLog.find({
       employee: user._id,
-
       attendance: attendance._id,
     })
       .sort({
@@ -111,8 +99,7 @@ export async function GET() {
 
     /*
     |--------------------------------------------------------------------------
-    | Convert BREAK_IN / BREAK_OUT
-    | into break records
+    | Breaks
     |--------------------------------------------------------------------------
     */
 
@@ -130,26 +117,27 @@ export async function GET() {
 
     for (const log of logs) {
       /*
-      |--------------------------------------------------------------------------
-      | Break started
-      |--------------------------------------------------------------------------
-      */
+       * Only use logs belonging to current session.
+       *
+       * AM = before 12
+       * PM = 12 onward
+       */
+
+      const logHour = dayjs(log.dateTime).hour();
+
+      const logSession = logHour < 12 ? 'am' : 'pm';
+
+      if (logSession !== session) {
+        continue;
+      }
 
       if (log.type === 'BREAK_IN') {
         activeBreak = {
           id: log._id.toString(),
-
           start: log.dateTime.toISOString(),
-
           end: null,
         };
       }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Break ended
-      |--------------------------------------------------------------------------
-      */
 
       if (log.type === 'BREAK_OUT' && activeBreak) {
         activeBreak.end = log.dateTime.toISOString();
@@ -159,12 +147,6 @@ export async function GET() {
         activeBreak = null;
       }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Current active break
-    |--------------------------------------------------------------------------
-    */
 
     if (activeBreak) {
       breaks.push(activeBreak);
@@ -180,6 +162,10 @@ export async function GET() {
       success: true,
 
       data: attendance,
+
+      session,
+
+      currentSession,
 
       breaks,
     });
