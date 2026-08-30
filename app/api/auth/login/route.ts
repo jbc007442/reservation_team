@@ -17,6 +17,12 @@ export async function POST(req: NextRequest) {
 
     const { name, password } = await req.json();
 
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Login
+    |--------------------------------------------------------------------------
+    */
+
     if (!name || !password) {
       return NextResponse.json(
         {
@@ -86,7 +92,7 @@ export async function POST(req: NextRequest) {
     | ATTENDANCE
     |--------------------------------------------------------------------------
     |
-    | Admin login does NOT create employee attendance.
+    | Admin does not create attendance.
     |
     */
 
@@ -101,13 +107,9 @@ export async function POST(req: NextRequest) {
       |--------------------------------------------------------------------------
       | Determine AM / PM
       |--------------------------------------------------------------------------
-      |
-      | Before 12:00 PM = AM
-      | 12:00 PM onwards = PM
-      |
       */
 
-      const session: 'am' | 'pm' = now.getHours() < 12 ? 'am' : 'pm';
+      const sessionName: 'am' | 'pm' = now.getHours() < 12 ? 'am' : 'pm';
 
       /*
       |--------------------------------------------------------------------------
@@ -126,7 +128,7 @@ export async function POST(req: NextRequest) {
 
       /*
       |--------------------------------------------------------------------------
-      | Create Attendance If Needed
+      | Create Today's Attendance
       |--------------------------------------------------------------------------
       */
 
@@ -136,18 +138,37 @@ export async function POST(req: NextRequest) {
 
           date: startOfDay,
 
-          am: {},
-          pm: {},
+          am: {
+            currentStatus: 'Checked Out',
+            checkIn: null,
+            checkOut: null,
+            workingMinutes: 0,
+            breakMinutes: 0,
+            lastActivityAt: null,
+            autoLoggedOut: false,
+            autoLogoutAt: null,
+          },
 
-          currentStatus: 'Working',
+          pm: {
+            currentStatus: 'Checked Out',
+            checkIn: null,
+            checkOut: null,
+            workingMinutes: 0,
+            breakMinutes: 0,
+            lastActivityAt: null,
+            autoLoggedOut: false,
+            autoLogoutAt: null,
+          },
 
-          lastActivityAt: now,
+          currentStatus: 'Checked Out',
+
+          lastActivityAt: null,
 
           workingMinutes: 0,
 
           breakMinutes: 0,
 
-          status: 'Present',
+          status: 'Absent',
 
           approvedBy: null,
 
@@ -161,23 +182,24 @@ export async function POST(req: NextRequest) {
 
       /*
       |--------------------------------------------------------------------------
-      | Get Current Session
+      | Current Session
       |--------------------------------------------------------------------------
       */
 
-      const currentSession = attendance[session];
+      const session = attendance[sessionName];
 
       /*
       |--------------------------------------------------------------------------
-      | Already Working
+      | Prevent Duplicate Login
       |--------------------------------------------------------------------------
       */
 
-      if (currentSession?.currentStatus === 'Working') {
+      if (session.currentStatus === 'Working' || session.currentStatus === 'On Break') {
         return NextResponse.json(
           {
             success: false,
-            message: `You are already checked in for the ${session.toUpperCase()} session.`,
+
+            message: `You are already logged in for the ${sessionName.toUpperCase()} session.`,
           },
           { status: 400 }
         );
@@ -185,39 +207,92 @@ export async function POST(req: NextRequest) {
 
       /*
       |--------------------------------------------------------------------------
-      | Start Session
+      | IMPORTANT
+      |--------------------------------------------------------------------------
+      |
+      | DO NOT RESET:
+      |
+      | session.workingMinutes
+      | session.breakMinutes
+      |
+      | These are the TOTAL AM/PM values.
+      |
+      | Every login/logout is recorded separately
+      | in AttendanceLog.
+      |
+      */
+
+      const previousWorkingMinutes = Number(session.workingMinutes || 0);
+
+      const previousBreakMinutes = Number(session.breakMinutes || 0);
+
+      /*
+      |--------------------------------------------------------------------------
+      | Start New Login Session
       |--------------------------------------------------------------------------
       */
 
       const autoLogoutAt = new Date(now.getTime() + MAX_SESSION_HOURS * 60 * 60 * 1000);
 
-      currentSession.checkIn = now;
-      currentSession.checkOut = null;
+      session.checkIn = now;
 
-      currentSession.currentStatus = 'Working';
+      session.checkOut = null;
 
-      currentSession.lastActivityAt = now;
+      session.currentStatus = 'Working';
 
-      currentSession.workingMinutes = 0;
-      currentSession.breakMinutes = 0;
+      session.lastActivityAt = now;
 
-      currentSession.autoLoggedOut = false;
-      currentSession.autoLogoutAt = autoLogoutAt;
+      /*
+      |--------------------------------------------------------------------------
+      | Preserve Previous AM / PM Totals
+      |--------------------------------------------------------------------------
+      */
+
+      session.workingMinutes = previousWorkingMinutes;
+
+      session.breakMinutes = previousBreakMinutes;
+
+      /*
+      |--------------------------------------------------------------------------
+      | Auto Logout
+      |--------------------------------------------------------------------------
+      */
+
+      session.autoLoggedOut = false;
+
+      session.autoLogoutAt = autoLogoutAt;
+
+      /*
+      |--------------------------------------------------------------------------
+      | Overall Attendance
+      |--------------------------------------------------------------------------
+      */
 
       attendance.currentStatus = 'Working';
+
       attendance.lastActivityAt = now;
 
       attendance.status = 'Present';
+
       attendance.updatedBy = user._id;
 
-      attendance.markModified(session);
+      attendance.markModified(sessionName);
+
+      /*
+      |--------------------------------------------------------------------------
+      | Save
+      |--------------------------------------------------------------------------
+      */
 
       await attendance.save();
 
       /*
       |--------------------------------------------------------------------------
-      | Attendance Log
+      | ALWAYS CREATE IN LOG
       |--------------------------------------------------------------------------
+      |
+      | Every login gets its own IN record.
+      |
       */
 
       await AttendanceLog.create({
@@ -231,7 +306,7 @@ export async function POST(req: NextRequest) {
 
         source: 'Web',
 
-        remarks: `${session.toUpperCase()} session started`,
+        remarks: `${sessionName.toUpperCase()} session started`,
 
         createdBy: user._id,
       });
@@ -245,6 +320,7 @@ export async function POST(req: NextRequest) {
 
     const token = signToken({
       userId: user._id.toString(),
+
       role: user.role,
     });
 
@@ -262,6 +338,17 @@ export async function POST(req: NextRequest) {
       role: user.role,
     });
 
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication Cookie
+    |--------------------------------------------------------------------------
+    |
+    | JWT = 7 days
+    |
+    | Attendance session = maximum 10 hours
+    |
+    */
+
     response.cookies.set('token', token, {
       httpOnly: true,
 
@@ -271,10 +358,6 @@ export async function POST(req: NextRequest) {
 
       path: '/',
 
-      /*
-       * JWT cookie can remain for 7 days.
-       * The attendance/session itself is limited to 10 hours.
-       */
       maxAge: 60 * 60 * 24 * 7,
     });
 
@@ -288,7 +371,9 @@ export async function POST(req: NextRequest) {
 
         message: error instanceof Error ? error.message : 'Internal server error',
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }

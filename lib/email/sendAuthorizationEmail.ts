@@ -16,7 +16,7 @@ export async function sendAuthorizationEmail({
 }: SendAuthorizationEmailProps) {
   try {
     const info = await transporter.sendMail({
-      from: `"Travel CRM" <${process.env.SMTP_FROM}>`,
+      from: `"My Trip Charge" <${process.env.SMTP_FROM}>`,
       to,
       subject,
       html: authorizationTemplate({

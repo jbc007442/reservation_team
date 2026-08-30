@@ -14,21 +14,15 @@ export async function POST() {
     await connectDB();
 
     const cookieStore = await cookies();
-
     const token = cookieStore.get('token')?.value;
 
     /*
     |--------------------------------------------------------------------------
-    | No Token
+    | Clear Authentication Cookie
     |--------------------------------------------------------------------------
     */
 
-    if (!token) {
-      const response = NextResponse.json({
-        success: true,
-        message: 'Logged out successfully.',
-      });
-
+    const clearTokenCookie = (response: NextResponse) => {
       response.cookies.set('token', '', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -38,6 +32,21 @@ export async function POST() {
       });
 
       return response;
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | No Token
+    |--------------------------------------------------------------------------
+    */
+
+    if (!token) {
+      return clearTokenCookie(
+        NextResponse.json({
+          success: true,
+          message: 'Logged out successfully.',
+        })
+      );
     }
 
     /*
@@ -52,11 +61,26 @@ export async function POST() {
 
     /*
     |--------------------------------------------------------------------------
+    | User Not Found
+    |--------------------------------------------------------------------------
+    */
+
+    if (!user) {
+      return clearTokenCookie(
+        NextResponse.json({
+          success: true,
+          message: 'Logged out successfully.',
+        })
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Employee Attendance
     |--------------------------------------------------------------------------
     */
 
-    if (user && user.role !== 'admin') {
+    if (user.role !== 'admin') {
       const now = new Date();
 
       const startOfDay = dayjs(now).startOf('day').toDate();
@@ -81,14 +105,15 @@ export async function POST() {
       if (attendance) {
         /*
         |--------------------------------------------------------------------------
-        | Determine Active Session
+        | Find Active Session
         |--------------------------------------------------------------------------
-        |
-        | We check PM first because PM is the later session.
-        |
         */
 
         let sessionName: 'am' | 'pm' | null = null;
+
+        /*
+         * Check PM first.
+         */
 
         if (
           attendance.pm &&
@@ -96,6 +121,10 @@ export async function POST() {
         ) {
           sessionName = 'pm';
         } else if (
+
+        /*
+         * Otherwise check AM.
+         */
           attendance.am &&
           (attendance.am.currentStatus === 'Working' || attendance.am.currentStatus === 'On Break')
         ) {
@@ -104,7 +133,7 @@ export async function POST() {
 
         /*
         |--------------------------------------------------------------------------
-        | No Active Session
+        | Active Session Found
         |--------------------------------------------------------------------------
         */
 
@@ -113,19 +142,57 @@ export async function POST() {
 
           /*
           |--------------------------------------------------------------------------
-          | Calculate Working Time
+          | Calculate Current Login Duration
           |--------------------------------------------------------------------------
           */
 
-          if (session.checkIn) {
-            const totalMinutes = Math.floor((now.getTime() - session.checkIn.getTime()) / 60000);
+          let currentSessionMinutes = 0;
 
-            session.workingMinutes = Math.max(0, totalMinutes - session.breakMinutes);
+          if (session.checkIn) {
+            currentSessionMinutes = Math.max(
+              0,
+              Math.floor((now.getTime() - session.checkIn.getTime()) / 60000)
+            );
           }
 
           /*
           |--------------------------------------------------------------------------
-          | Checkout Session
+          | Current Session Break
+          |--------------------------------------------------------------------------
+          |
+          | session.breakMinutes already contains breaks from this
+          | current login session.
+          |
+          */
+
+          const currentBreakMinutes = Number(session.breakMinutes || 0);
+
+          /*
+          |--------------------------------------------------------------------------
+          | Current Session Working Time
+          |--------------------------------------------------------------------------
+          */
+
+          const currentWorkingMinutes = Math.max(0, currentSessionMinutes - currentBreakMinutes);
+
+          /*
+          |--------------------------------------------------------------------------
+          | IMPORTANT
+          |--------------------------------------------------------------------------
+          |
+          | ADD current login session to existing AM/PM total.
+          |
+          | Do NOT reset the previous total.
+          |
+          */
+
+          const previousWorkingMinutes = Number(session.workingMinutes || 0);
+
+          session.workingMinutes = previousWorkingMinutes + currentWorkingMinutes;
+
+          /*
+          |--------------------------------------------------------------------------
+          | Checkout
           |--------------------------------------------------------------------------
           */
 
@@ -134,6 +201,12 @@ export async function POST() {
           session.currentStatus = 'Checked Out';
 
           session.lastActivityAt = now;
+
+          /*
+          |--------------------------------------------------------------------------
+          | Manual Logout
+          |--------------------------------------------------------------------------
+          */
 
           session.autoLoggedOut = false;
 
@@ -150,14 +223,18 @@ export async function POST() {
           attendance.lastActivityAt = now;
 
           /*
-          | Calculate total working minutes
+          |--------------------------------------------------------------------------
+          | Daily Working Total
+          |--------------------------------------------------------------------------
           */
 
           attendance.workingMinutes =
             Number(attendance.am?.workingMinutes || 0) + Number(attendance.pm?.workingMinutes || 0);
 
           /*
-          | Calculate total break minutes
+          |--------------------------------------------------------------------------
+          | Daily Break Total
+          |--------------------------------------------------------------------------
           */
 
           attendance.breakMinutes =
@@ -165,14 +242,29 @@ export async function POST() {
 
           attendance.updatedBy = user._id;
 
+          /*
+          |--------------------------------------------------------------------------
+          | Mark Nested Session Modified
+          |--------------------------------------------------------------------------
+          */
+
           attendance.markModified(sessionName);
+
+          /*
+          |--------------------------------------------------------------------------
+          | Save
+          |--------------------------------------------------------------------------
+          */
 
           await attendance.save();
 
           /*
           |--------------------------------------------------------------------------
-          | Attendance OUT Log
+          | Create OUT Log
           |--------------------------------------------------------------------------
+          |
+          | Every logout gets a separate OUT log.
+          |
           */
 
           await AttendanceLog.create({
@@ -200,45 +292,43 @@ export async function POST() {
     |--------------------------------------------------------------------------
     */
 
-    const response = NextResponse.json({
-      success: true,
-      message: 'Logged out successfully.',
-    });
-
-    response.cookies.set('token', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      expires: new Date(0),
-    });
-
-    return response;
+    return clearTokenCookie(
+      NextResponse.json({
+        success: true,
+        message: 'Logged out successfully.',
+      })
+    );
   } catch (error) {
     console.error('Logout API Error:', error);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Always Clear Cookie
-    |--------------------------------------------------------------------------
-    */
 
     const response = NextResponse.json(
       {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to logout.',
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
 
-    response.cookies.set('token', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      expires: new Date(0),
-    });
-
-    return response;
+    return clearTokenCookie(response);
   }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Cookie Helper
+|--------------------------------------------------------------------------
+*/
+
+function clearTokenCookie(response: NextResponse) {
+  response.cookies.set('token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    expires: new Date(0),
+  });
+
+  return response;
 }

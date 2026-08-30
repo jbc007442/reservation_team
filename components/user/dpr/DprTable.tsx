@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Popconfirm, Space, Table, Tag } from 'antd';
+import { Button, Popconfirm, Space, Spin, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -9,11 +9,12 @@ import type { DprData } from './DprForm';
 
 interface DprTableProps {
   data: DprData[];
-  onEdit: (record: DprData) => void;
-  onDelete: (id: string) => void;
+  loading?: boolean;
+  onEdit?: (record: DprData) => void;
+  onDelete?: (id: string) => void;
 }
 
-export default function DprTable({ data, onEdit, onDelete }: DprTableProps) {
+export default function DprTable({ data, loading, onEdit, onDelete }: DprTableProps) {
   const columns: ColumnsType<DprData> = [
     {
       title: 'Date',
@@ -90,37 +91,72 @@ export default function DprTable({ data, onEdit, onDelete }: DprTableProps) {
       width: 100,
       align: 'center',
 
-      render: (_, record) => (
-        <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => onEdit(record)} />
+      render: (_, record) => {
+        const actions = [];
 
-          <Popconfirm
-            title="Delete DPR?"
-            description="Are you sure you want to delete this DPR?"
-            okText="Yes"
-            cancelText="No"
-            onConfirm={() => {
-              if (record._id) {
-                onDelete(record._id);
-              }
-            }}
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
+        /*
+        |--------------------------------------------------------------------------
+        | Edit
+        |--------------------------------------------------------------------------
+        */
+
+        if (onEdit) {
+          actions.push(
+            <Button key="edit" type="text" icon={<EditOutlined />} onClick={() => onEdit(record)} />
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Delete
+        |--------------------------------------------------------------------------
+        */
+
+        if (onDelete) {
+          actions.push(
+            <Popconfirm
+              key="delete"
+              title="Delete DPR?"
+              description="Are you sure you want to delete this DPR?"
+              okText="Yes"
+              cancelText="No"
+              onConfirm={() => {
+                if (record._id) {
+                  onDelete(record._id);
+                }
+              }}
+            >
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | No Actions
+        |--------------------------------------------------------------------------
+        */
+
+        if (actions.length === 0) {
+          return null;
+        }
+
+        return <Space size="middle">{actions}</Space>;
+      },
     },
   ];
 
   return (
-    <Table
-      rowKey="_id"
-      columns={columns}
-      dataSource={data}
-      scroll={{ x: 1200 }}
-      pagination={{
-        pageSize: 10,
-      }}
-    />
+    <Spin spinning={loading} tip="Loading DPR...">
+      <Table
+        rowKey="_id"
+        columns={columns}
+        dataSource={data}
+        scroll={{ x: 1200 }}
+        pagination={{
+          pageSize: 10,
+        }}
+      />
+    </Spin>
   );
 }

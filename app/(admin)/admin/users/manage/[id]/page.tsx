@@ -1,9 +1,13 @@
-import React from 'react'
+import UserDetails from '@/components/admin/users/UserDetails';
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
+interface PageProps {
+  params: Promise<{
+    id: string;
+  }>;
 }
 
-export default page
+export default async function Page({ params }: PageProps) {
+  const { id } = await params;
+
+  return <UserDetails id={id} />;
+}

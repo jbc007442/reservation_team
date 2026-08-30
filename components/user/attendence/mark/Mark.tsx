@@ -122,6 +122,81 @@ export default function Mark() {
   }, []);
 
   /*
+|--------------------------------------------------------------------------
+| Automatic 10 Hour Logout
+|--------------------------------------------------------------------------
+*/
+
+  useEffect(() => {
+    if (!currentSession?.autoLogoutAt) {
+      return;
+    }
+
+    const checkAutoLogout = async () => {
+      const logoutAt = dayjs(currentSession.autoLogoutAt);
+
+      if (dayjs().isBefore(logoutAt)) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const response = await fetch('/api/auth/logout', {
+          method: 'POST',
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || 'Automatic logout failed.');
+        }
+
+        /*
+         * Remove local attendance state
+         */
+        setAttendance((previous) => {
+          if (!previous || !session) {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            [session]: {
+              ...previous[session],
+              currentStatus: 'Checked Out',
+              checkOut: new Date().toISOString(),
+              autoLoggedOut: true,
+              autoLogoutAt: null,
+            },
+          };
+        });
+
+        /*
+         * Redirect to login
+         */
+        window.location.href = '/login';
+      } catch (error) {
+        console.error('Automatic logout error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    /*
+     * Check immediately
+     */
+    checkAutoLogout();
+
+    /*
+     * Check every 30 seconds
+     */
+    const timer = setInterval(checkAutoLogout, 30 * 1000);
+
+    return () => clearInterval(timer);
+  }, [currentSession?.autoLogoutAt, session]);
+
+  /*
   |--------------------------------------------------------------------------
   | Format Time
   |--------------------------------------------------------------------------

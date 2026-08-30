@@ -1,18 +1,4 @@
-// import jwt from 'jsonwebtoken';
-
-// const JWT_SECRET = process.env.JWT_SECRET!;
-
-// export function signToken(payload: object) {
-//   return jwt.sign(payload, JWT_SECRET, {
-//     expiresIn: '7d',
-//   });
-// }
-
-// export function verifyToken(token: string) {
-//   return jwt.verify(token, JWT_SECRET);
-// }
-
-import jwt, { JwtPayload } from 'jsonwebtoken';
+import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -21,11 +7,23 @@ export interface AuthTokenPayload extends JwtPayload {
   role: string;
 }
 
-export function signToken(payload: object) {
+/*
+|--------------------------------------------------------------------------
+| Create Token
+|--------------------------------------------------------------------------
+*/
+
+export function signToken(payload: object, expiresIn: SignOptions['expiresIn'] = '7d') {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: '7d',
+    expiresIn,
   });
 }
+
+/*
+|--------------------------------------------------------------------------
+| Verify Token
+|--------------------------------------------------------------------------
+*/
 
 export function verifyToken(token: string): AuthTokenPayload {
   const decoded = jwt.verify(token, JWT_SECRET);
@@ -36,6 +34,10 @@ export function verifyToken(token: string): AuthTokenPayload {
 
   if (!decoded.userId || typeof decoded.userId !== 'string') {
     throw new Error('User ID missing from token');
+  }
+
+  if (!decoded.role || typeof decoded.role !== 'string') {
+    throw new Error('User role missing from token');
   }
 
   return decoded as AuthTokenPayload;

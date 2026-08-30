@@ -6,11 +6,49 @@ import User from '@/models/user/User';
 import { verifyToken } from '@/lib/jwt';
 import { connectDB } from '@/lib/mongodb';
 
+/*
+|--------------------------------------------------------------------------
+| Allowed Booking Permissions
+|--------------------------------------------------------------------------
+*/
+
+const ALLOWED_PERMISSIONS = [
+  'booking.query',
+  'booking.create',
+  'booking.edit',
+  'booking.delete',
+
+  // Auth Form
+  'booking.authform.view',
+  'booking.authform',
+
+  // Auth Form Tabs
+  'booking.authform.approval.view',
+  'booking.authform.mail.view',
+  'booking.authform.billing.view',
+  'booking.authform.history.view',
+  'booking.authform.notes.view',
+  'booking.authform.itinerary.view',
+
+  // DPR
+  'booking.dpr',
+  'booking.dpr.create',
+  'booking.dpr.edit',
+  'booking.dpr.delete',
+];
+
+/*
+|--------------------------------------------------------------------------
+| GET USER PERMISSIONS
+|--------------------------------------------------------------------------
+*/
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
@@ -23,9 +61,65 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    verifyToken(token);
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Logged In User
+    |--------------------------------------------------------------------------
+    */
+
+    const payload = verifyToken(token);
+
+    const loggedInUser = await User.findById(payload.userId).select('_id role status').lean();
+
+    if (!loggedInUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'User not found',
+        },
+        { status: 401 }
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Only Admin Can Manage Permissions
+    |--------------------------------------------------------------------------
+    */
+
+    if (loggedInUser.status !== 'active') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Your account is inactive',
+        },
+        { status: 403 }
+      );
+    }
+
+    if (loggedInUser.role !== 'admin') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Only admin can manage permissions',
+        },
+        { status: 403 }
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | User ID
+    |--------------------------------------------------------------------------
+    */
 
     const { id } = await params;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Find User
+    |--------------------------------------------------------------------------
+    */
 
     const user = await User.findById(id)
       .select('employeeId name email role permissions status')
@@ -45,24 +139,31 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       success: true,
       data: user,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('User permissions GET error:', error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error?.message || 'Failed to fetch user permissions',
+        message: error instanceof Error ? error.message : 'Failed to fetch user permissions',
       },
       { status: 500 }
     );
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| UPDATE USER PERMISSIONS
+|--------------------------------------------------------------------------
+*/
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
 
     const cookieStore = await cookies();
+
     const token = cookieStore.get('token')?.value;
 
     if (!token) {
@@ -75,9 +176,65 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
-    verifyToken(token);
+    /*
+    |--------------------------------------------------------------------------
+    | Verify Logged In User
+    |--------------------------------------------------------------------------
+    */
+
+    const payload = verifyToken(token);
+
+    const loggedInUser = await User.findById(payload.userId).select('_id role status').lean();
+
+    if (!loggedInUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'User not found',
+        },
+        { status: 401 }
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Only Admin
+    |--------------------------------------------------------------------------
+    */
+
+    if (loggedInUser.status !== 'active') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Your account is inactive',
+        },
+        { status: 403 }
+      );
+    }
+
+    if (loggedInUser.role !== 'admin') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Only admin can manage permissions',
+        },
+        { status: 403 }
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | User ID
+    |--------------------------------------------------------------------------
+    */
 
     const { id } = await params;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Body
+    |--------------------------------------------------------------------------
+    */
 
     const body = await request.json();
 
@@ -93,11 +250,61 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Remove Invalid Permissions
+    |--------------------------------------------------------------------------
+    */
+
+    const cleanPermissions = [
+      ...new Set(
+        permissions.filter(
+          (permission): permission is string =>
+            typeof permission === 'string' && ALLOWED_PERMISSIONS.includes(permission)
+        )
+      ),
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prevent Assigning Permissions To Admin
+    |--------------------------------------------------------------------------
+    */
+
+    const targetUser = await User.findById(id).select('_id role').lean();
+
+    if (!targetUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'User not found',
+        },
+        { status: 404 }
+      );
+    }
+
+    if (targetUser.role === 'admin') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Admin permissions are controlled by the admin role',
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Update
+    |--------------------------------------------------------------------------
+    */
+
     const user = await User.findByIdAndUpdate(
       id,
       {
         $set: {
-          permissions,
+          permissions: cleanPermissions,
+          updatedBy: loggedInUser._id,
         },
       },
       {
@@ -123,13 +330,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       message: 'Permissions updated successfully',
       data: user,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('User permissions PATCH error:', error);
 
     return NextResponse.json(
       {
         success: false,
-        message: error?.message || 'Failed to update permissions',
+        message: error instanceof Error ? error.message : 'Failed to update permissions',
       },
       { status: 500 }
     );

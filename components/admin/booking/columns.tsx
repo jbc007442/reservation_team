@@ -35,7 +35,7 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
       createElement(
         Link,
         {
-          href: `/admin/booking/authform/${record._id}`,
+          href: `/dashboard/booking/authform/${record._id}`,
           className: 'text-blue-600 hover:underline font-medium',
         },
         record.bookingNo
@@ -108,7 +108,7 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
             {
               key: 'view',
               icon: <EyeOutlined />,
-              label: <Link href={`/admin/booking/authform/${record._id}`}>View</Link>,
+              label: <Link href={`/dashboard/booking/authform/${record._id}`}>View</Link>,
             },
             {
               key: 'edit',
@@ -140,3 +140,5 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
     ),
   },
 ];
+
+
