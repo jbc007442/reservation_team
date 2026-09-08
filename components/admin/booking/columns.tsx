@@ -35,7 +35,7 @@ export const bookingColumns = ({ onEdit, onDelete }: BookingColumnsProps) => [
       createElement(
         Link,
         {
-          href: `/dashboard/booking/authform/${record._id}`,
+          href: `/admin/booking/authform/${record._id}`,
           className: 'text-blue-600 hover:underline font-medium',
         },
         record.bookingNo

@@ -293,7 +293,7 @@ export interface IAuthForm extends Document {
 
   content: string;
 
-  bookingDetails: string;
+  bookingDetails: string[];
 
   bookingDetailsType: 'image' | 'api';
 
@@ -406,8 +406,8 @@ const AuthFormSchema = new Schema<IAuthForm>(
     content: String,
 
     bookingDetails: {
-      type: String,
-      default: '',
+      type: [String],
+      default: [],
     },
 
     bookingDetailsType: {

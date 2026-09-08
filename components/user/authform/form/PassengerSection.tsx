@@ -13,18 +13,21 @@ export default function PassengerSection({
   removePassenger,
   updatePassenger,
 }: PassengerSectionProps) {
-  const customerName = booking.customer.name.trim().split(' ');
-
   return (
     <>
       {passengers.map((passenger, index) => (
         <Row key={index} gutter={16} align="middle">
           {/* Salutation */}
           <Col xs={24} md={4}>
-            <Form.Item label={index === 0 ? 'Salutation' : `Salutation ${index + 1}`}>
+            <Form.Item
+              label={index === 0 ? 'Salutation' : `Salutation ${index + 1}`}
+              required
+              validateStatus={!passenger.title ? 'error' : ''}
+              help={!passenger.title ? 'Please select salutation' : ''}
+            >
               <Select
                 placeholder="Select Salutation"
-                value={passenger.title || 'Mr.'}
+                value={passenger.title || undefined}
                 onChange={(value) => updatePassenger(index, 'title', value)}
                 options={[
                   { label: 'Mr.', value: 'Mr.' },
@@ -40,10 +43,15 @@ export default function PassengerSection({
 
           {/* First Name */}
           <Col xs={24} md={4}>
-            <Form.Item label={index === 0 ? 'First Name' : `First Name ${index + 1}`}>
+            <Form.Item
+              label={index === 0 ? 'First Name' : `First Name ${index + 1}`}
+              required
+              validateStatus={!passenger.firstName?.trim() ? 'error' : ''}
+              help={!passenger.firstName?.trim() ? 'Please enter first name' : ''}
+            >
               <Input
                 placeholder="First Name"
-                value={passenger.firstName}
+                value={passenger.firstName || ''}
                 onChange={(e) => updatePassenger(index, 'firstName', e.target.value)}
               />
             </Form.Item>
@@ -54,7 +62,7 @@ export default function PassengerSection({
             <Form.Item label={index === 0 ? 'Middle Name' : `Middle Name ${index + 1}`}>
               <Input
                 placeholder="Middle Name"
-                value={passenger.middleName}
+                value={passenger.middleName || ''}
                 onChange={(e) => updatePassenger(index, 'middleName', e.target.value)}
               />
             </Form.Item>
@@ -62,10 +70,15 @@ export default function PassengerSection({
 
           {/* Last Name */}
           <Col xs={24} md={4}>
-            <Form.Item label={index === 0 ? 'Last Name' : `Last Name ${index + 1}`}>
+            <Form.Item
+              label={index === 0 ? 'Last Name' : `Last Name ${index + 1}`}
+              required
+              validateStatus={!passenger.lastName?.trim() ? 'error' : ''}
+              help={!passenger.lastName?.trim() ? 'Please enter last name' : ''}
+            >
               <Input
                 placeholder="Last Name"
-                value={passenger.lastName}
+                value={passenger.lastName || ''}
                 onChange={(e) => updatePassenger(index, 'lastName', e.target.value)}
               />
             </Form.Item>
@@ -73,10 +86,15 @@ export default function PassengerSection({
 
           {/* Gender */}
           <Col xs={24} md={4}>
-            <Form.Item label={index === 0 ? 'Gender' : `Gender ${index + 1}`}>
+            <Form.Item
+              label={index === 0 ? 'Gender' : `Gender ${index + 1}`}
+              required
+              validateStatus={!passenger.gender ? 'error' : ''}
+              help={!passenger.gender ? 'Please select gender' : ''}
+            >
               <Select
                 placeholder="Select Gender"
-                value={passenger.gender || 'Male'}
+                value={passenger.gender || undefined}
                 onChange={(value) => updatePassenger(index, 'gender', value)}
                 options={[
                   { label: 'Male', value: 'Male' },
@@ -89,7 +107,12 @@ export default function PassengerSection({
 
           {/* DOB */}
           <Col xs={24} md={6}>
-            <Form.Item label={index === 0 ? 'Date of Birth' : `Date of Birth ${index + 1}`}>
+            <Form.Item
+              label={index === 0 ? 'Date of Birth' : `Date of Birth ${index + 1}`}
+              required
+              validateStatus={!passenger.dob ? 'error' : ''}
+              help={!passenger.dob ? 'Please select date of birth' : ''}
+            >
               <DatePicker
                 className="w-full"
                 format="DD-MM-YYYY"

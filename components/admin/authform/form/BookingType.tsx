@@ -1,12 +1,23 @@
 'use client';
 
 import { Form, Select } from 'antd';
+
 import { bookingTypeOptions, termsTemplates } from './constants';
 import { BookingTypeProps } from './types';
 
 export default function BookingType({ booking, setBookingType, setTerms }: BookingTypeProps) {
   return (
-    <Form.Item label="Booking Type" name="bookingType" initialValue={booking.service}>
+    <Form.Item
+      label="Booking Type"
+      name="bookingType"
+      initialValue={booking.service}
+      rules={[
+        {
+          required: true,
+          message: 'Please select booking type',
+        },
+      ]}
+    >
       <Select
         placeholder="Select Booking Type"
         options={bookingTypeOptions}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button, Drawer, Form, Input, Select, Switch, Upload, Space, Tooltip } from 'antd';
+import type { UploadFile } from 'antd';
 import { InboxOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
 import { useAuthStore } from '@/store/authStore';
 
@@ -16,6 +17,7 @@ export default function NotePost({ bookingId }: NotePostProps) {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [form] = Form.useForm();
 
   const handleSave = async () => {
@@ -24,17 +26,22 @@ export default function NotePost({ bookingId }: NotePostProps) {
 
       setLoading(true);
 
+      const formData = new FormData();
+
+      formData.append('bookingId', bookingId);
+      formData.append('addedBy', user?._id || '');
+
+      Object.entries(values).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+
+      if (fileList.length > 0) {
+        formData.append('attachment', fileList[0].originFileObj as File);
+      }
+
       const response = await fetch('/api/authform/note', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          bookingId,
-          addedBy: user?._id,
-          ...values,
-          attachments: [],
-        }),
+        body: formData,
       });
 
       const result = await response.json();
@@ -46,6 +53,7 @@ export default function NotePost({ bookingId }: NotePostProps) {
       console.log(result);
 
       form.resetFields();
+      setFileList([]);
       setOpen(false);
     } catch (error: any) {
       console.error(error);
@@ -143,7 +151,12 @@ export default function NotePost({ bookingId }: NotePostProps) {
           </Form.Item>
 
           <Form.Item label="Attachment">
-            <Dragger beforeUpload={() => false} maxCount={1}>
+            <Dragger
+              beforeUpload={() => false}
+              fileList={fileList}
+              maxCount={1}
+              onChange={({ fileList }) => setFileList(fileList)}
+            >
               <p className="ant-upload-drag-icon">
                 <InboxOutlined />
               </p>

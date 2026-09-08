@@ -30,7 +30,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const [form] = Form.useForm();
 
   const [content, setContent] = useState('');
-  const [bookingImage, setBookingImage] = useState<UploadFile | null>(null);
+  const [bookingImage, setBookingImage] = useState<UploadFile[]>([]);
   const [, setBookingType] = useState<string>();
   const [terms, setTerms] = useState<string>(termsTemplates.Flight);
   const [charges, setCharges] = useState<ChargeItem[]>([]);
@@ -40,10 +40,21 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const [paymentLocked, setPaymentLocked] = useState(false);
   const chargesTotal = charges.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const totalAmount = chargesTotal + (Number(taxesAndFee) || 0);
+
   const [loading, setLoading] = useState(false);
   const [authFormId, setAuthFormId] = useState<string | null>(null);
+
   const customerName = booking.customer.name.trim().split(' ');
+
   const [selectedFlight, setSelectedFlight] = useState<any>(null);
+
+  /*
+   * Keep the old uploaded image URLs separately.
+   *
+   * This is important because bookingImage can become [] when
+   * switching from image mode to itinerary mode.
+   */
+  const [existingBookingImages, setExistingBookingImages] = useState<string[]>([]);
 
   const [passengers, setPassengers] = useState<Passenger[]>([
     {
@@ -104,17 +115,21 @@ export default function AuthForm({ booking }: AuthFormProps) {
   const loadAuthForm = async () => {
     try {
       const res = await fetch(`/api/authform/booking/${booking._id}`);
+
       const result = await res.json();
 
-      // Existing Auth Form
+      // =========================================================
+      // EXISTING AUTH FORM
+      // =========================================================
       if (result.data) {
         console.log('API Response:', result.data);
+
         setAuthFormId(result.data._id);
 
         form.setFieldsValue({
           emailSubject: result.data.email?.subject || '',
           customerEmail: booking.customer.email,
-          bookingReferenceNo: result.data.bookingReferenceNo,
+          bookingReferenceNo: result.data.bookingReferenceNo || '',
           metaReferenceNo: result.data.metaReferenceNo || '',
           bookingType: result.data.bookingType,
           serviceType: result.data.serviceType,
@@ -122,29 +137,53 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         setContent(result.data.content || '');
 
-        // Reset both states first
-        setBookingImage(null);
+        // =====================================================
+        // RESET BOOKING DETAILS
+        // =====================================================
+        setBookingImage([]);
         setSelectedFlight(null);
+        setExistingBookingImages([]);
 
-        // Image booking
+        // =====================================================
+        // IMAGE BOOKING
+        // =====================================================
         if (result.data.bookingDetailsType === 'image' && result.data.bookingDetails) {
-          setBookingImage({
-            uid: '-1',
-            name: 'booking-detail',
-            status: 'done',
-            url: result.data.bookingDetails,
-          });
+          const imageUrls: string[] = Array.isArray(result.data.bookingDetails)
+            ? result.data.bookingDetails.filter(
+                (url: any): url is string => typeof url === 'string' && url.trim() !== ''
+              )
+            : typeof result.data.bookingDetails === 'string'
+              ? [result.data.bookingDetails]
+              : [];
+
+          setExistingBookingImages(imageUrls);
+
+          setBookingImage(
+            imageUrls.map((url, index) => ({
+              uid: `existing-${index}-${url}`,
+              name: `booking-detail-${index + 1}`,
+              status: 'done' as const,
+              url,
+            }))
+          );
         }
 
-        // API itinerary booking
+        // =====================================================
+        // API ITINERARY BOOKING
+        // =====================================================
         if (result.data.bookingDetailsType === 'api' && result.data.itineraryData) {
           setSelectedFlight(result.data.itineraryData);
         }
 
-        setTerms(result.data.terms || '');
+        setTerms(result.data.terms || termsTemplates.Flight);
+
         setCharges(result.data.charges || []);
+
         setTaxesAndFee(result.data.taxesAndFee ?? null);
 
+        // =====================================================
+        // CARDS
+        // =====================================================
         const loadedCards = (result.data.cards || []).map((card: any) => ({
           ...card,
           expiryDate: card.expiryDate ? dayjs(card.expiryDate, 'MM/YYYY') : null,
@@ -152,7 +191,9 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         setCards(loadedCards);
 
-        // Lock AuthForm only when ALL charges are Approved
+        // =====================================================
+        // PAYMENT LOCK
+        // =====================================================
         const loadedCharges = result.data.charges || [];
 
         const allPaymentsApproved =
@@ -161,6 +202,9 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         setPaymentLocked(allPaymentsApproved);
 
+        // =====================================================
+        // PASSENGERS
+        // =====================================================
         const loadedPassengers = (result.data.passengers || []).map((p: any) => ({
           title: p.title,
           firstName: p.firstName,
@@ -172,6 +216,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         if (loadedPassengers.length > 0) {
           console.log('Existing Auth Form - Loaded passengers', loadedPassengers);
+
           setPassengers(loadedPassengers);
         } else {
           setPassengers([
@@ -186,7 +231,9 @@ export default function AuthForm({ booking }: AuthFormProps) {
           ]);
         }
       } else {
-        // New Auth Form
+        // =========================================================
+        // NEW AUTH FORM
+        // =========================================================
         setAuthFormId(null);
 
         form.setFieldsValue({
@@ -199,12 +246,18 @@ export default function AuthForm({ booking }: AuthFormProps) {
         });
 
         setContent('');
+        setBookingImage([]);
+        setExistingBookingImages([]);
+        setSelectedFlight(null);
+
         setTerms(termsTemplates.Flight);
         setCharges([]);
         setTaxesAndFee(null);
         setCards([]);
         setPaymentLocked(false);
+
         console.log('New Auth Form - Creating default passenger');
+
         setPassengers([
           {
             title: 'Mr.',
@@ -224,12 +277,43 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
   console.log('Passengers State:', passengers);
 
+  // ===========================================================
+  // DELETE OLD IMAGE
+  // ===========================================================
+  const deleteBookingImage = async (url: string) => {
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url,
+          folder: 'authform/booking-detail',
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to delete booking image:', url);
+      }
+    } catch (error) {
+      console.error('Error deleting booking image:', error);
+    }
+  };
+
+  // ===========================================================
+  // FINISH
+  // ===========================================================
   const onFinish = async (values: any) => {
     console.log('===== onFinish Called =====');
     console.log('Passengers State:', passengers);
+
     try {
       setLoading(true);
 
+      // =======================================================
+      // CARD TOTAL VALIDATION
+      // =======================================================
       const totalCardAmount = cards.reduce((sum, card) => sum + (Number(card.amount) || 0), 0);
 
       if (totalCardAmount < totalAmount) {
@@ -238,6 +322,7 @@ export default function AuthForm({ booking }: AuthFormProps) {
             totalAmount - totalCardAmount
           }`
         );
+
         setLoading(false);
         return;
       }
@@ -248,73 +333,115 @@ export default function AuthForm({ booking }: AuthFormProps) {
             totalCardAmount - totalAmount
           }`
         );
+
         setLoading(false);
         return;
       }
 
-      const oldBookingImage = bookingImage?.url || '';
+      // =======================================================
+      // BOOKING DETAILS
+      // =======================================================
+      let bookingDetails: string[] = [];
 
-      let bookingDetails = '';
       let bookingDetailsType: 'image' | 'api' = 'image';
+
       let itineraryData: any = null;
 
-      // ===========================
+      // =======================================================
       // IMAGE MODE
-      // ===========================
-      if (bookingImage) {
+      // =======================================================
+      if (bookingImage.length > 0) {
         bookingDetailsType = 'image';
         itineraryData = null;
 
-        // New image uploaded
-        if (bookingImage.originFileObj) {
-          const formData = new FormData();
+        for (const image of bookingImage) {
+          // ---------------------------------------------------
+          // NEW IMAGE
+          // ---------------------------------------------------
+          if (image.originFileObj) {
+            const formData = new FormData();
 
-          formData.append('file', bookingImage.originFileObj as File);
-          formData.append('folder', 'authform/booking-detail');
-          formData.append('bookingId', booking._id);
-          formData.append('bookingNo', booking.bookingNo);
+            formData.append('file', image.originFileObj as File);
 
-          const uploadResponse = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-          });
+            formData.append('folder', 'authform/booking-detail');
 
-          if (!uploadResponse.ok) {
-            throw new Error('Failed to upload booking image');
+            formData.append('bookingId', booking._id);
+
+            formData.append('bookingNo', booking.bookingNo);
+
+            const uploadResponse = await fetch('/api/upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            if (!uploadResponse.ok) {
+              const errorResult = await uploadResponse.json().catch(() => null);
+
+              throw new Error(errorResult?.message || 'Failed to upload booking image');
+            }
+
+            const uploadResult = await uploadResponse.json();
+
+            if (!uploadResult?.url) {
+              throw new Error('Upload response did not contain image URL');
+            }
+
+            bookingDetails.push(uploadResult.url);
           }
 
-          const uploadResult = await uploadResponse.json();
+          // ---------------------------------------------------
+          // EXISTING IMAGE
+          // ---------------------------------------------------
+          else if (image.url) {
+            bookingDetails.push(image.url);
+          }
+        }
 
-          bookingDetails = uploadResult.url;
-        } else {
-          // Existing image
-          bookingDetails = oldBookingImage;
+        // =====================================================
+        // DELETE OLD IMAGES THAT WERE REMOVED BY USER
+        // =====================================================
+        const currentImageUrls = bookingDetails.filter(Boolean);
+
+        const removedImages = existingBookingImages.filter(
+          (oldUrl) => !currentImageUrls.includes(oldUrl)
+        );
+
+        for (const oldImage of removedImages) {
+          await deleteBookingImage(oldImage);
         }
       }
 
-      // ===========================
+      // =======================================================
       // ITINERARY MODE
-      // ===========================
+      // =======================================================
       else if (selectedFlight) {
         bookingDetailsType = 'api';
         itineraryData = selectedFlight;
-        bookingDetails = '';
+        bookingDetails = [];
 
-        // Delete old uploaded image
-        if (oldBookingImage) {
-          await fetch('/api/upload', {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              url: oldBookingImage,
-              folder: 'authform/booking-detail',
-            }),
-          });
+        // Delete ALL old uploaded booking images
+        for (const oldImage of existingBookingImages) {
+          await deleteBookingImage(oldImage);
         }
       }
 
+      // =======================================================
+      // NO IMAGE + NO ITINERARY
+      // =======================================================
+      else {
+        bookingDetailsType = 'image';
+        bookingDetails = [];
+        itineraryData = null;
+
+        // If all images were removed, delete old files
+        for (const oldImage of existingBookingImages) {
+          await deleteBookingImage(oldImage);
+        }
+      }
+
+      // =======================================================
+      // PAYLOAD
+      // =======================================================
       const payload = {
         bookingId: booking._id,
         bookingNo: booking.bookingNo,
@@ -324,9 +451,11 @@ export default function AuthForm({ booking }: AuthFormProps) {
         },
 
         bookingReferenceNo: values.bookingReferenceNo,
+
         metaReferenceNo: values.metaReferenceNo,
 
         bookingType: values.bookingType,
+
         serviceType: values.serviceType,
 
         passengers: passengers
@@ -341,15 +470,21 @@ export default function AuthForm({ booking }: AuthFormProps) {
           })),
 
         content,
+
         terms,
 
         bookingDetails,
+
         bookingDetailsType,
+
         itineraryData,
 
         charges,
 
         cards: cards.map((card) => {
+          // ===================================================
+          // OTHER CARD
+          // ===================================================
           if (card.cardType === 'other') {
             return {
               cardType: 'other',
@@ -359,6 +494,9 @@ export default function AuthForm({ booking }: AuthFormProps) {
             };
           }
 
+          // ===================================================
+          // NORMAL CARD
+          // ===================================================
           return {
             cardType: card.cardType,
             cardHolderName: card.cardHolderName,
@@ -372,6 +510,11 @@ export default function AuthForm({ booking }: AuthFormProps) {
         }),
       };
 
+      console.log('Auth Form Payload:', payload);
+
+      // =======================================================
+      // SAVE / UPDATE
+      // =======================================================
       const url = authFormId ? `/api/authform/${authFormId}` : '/api/authform';
 
       const method = authFormId ? 'PATCH' : 'POST';
@@ -387,29 +530,48 @@ export default function AuthForm({ booking }: AuthFormProps) {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message);
+        throw new Error(result.message || 'Failed to save authorization form');
       }
 
       message.success(result.message);
 
-      if (!authFormId) {
+      if (!authFormId && result.data?._id) {
         setAuthFormId(result.data._id);
       }
 
-      console.log(result);
+      // Keep current images as the new existing images
+      setExistingBookingImages(bookingDetails);
+
+      console.log('Auth Form Save Result:', result);
     } catch (error: any) {
+      console.error('Auth Form Save Error:', error);
+
       message.error(error.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
   };
 
+  // ===========================================================
+  // CANCEL
+  // ===========================================================
   const handleCancel = () => {
     form.resetFields();
+
     setContent('');
+
     setTerms(termsTemplates.Flight);
+
+    setBookingImage([]);
+
+    setExistingBookingImages([]);
+
+    setSelectedFlight(null);
   };
 
+  // ===========================================================
+  // UI
+  // ===========================================================
   return (
     <Card title="Email Authentication">
       <Form form={form} layout="vertical" onFinish={onFinish}>
@@ -433,7 +595,14 @@ export default function AuthForm({ booking }: AuthFormProps) {
           </Col>
         </Row>
 
-        <Card size="small" title="Email Content" style={{ marginTop: 16, marginBottom: 16 }}>
+        <Card
+          size="small"
+          title="Email Content"
+          style={{
+            marginTop: 16,
+            marginBottom: 16,
+          }}
+        >
           <RichTextEditor
             label="Content"
             value={content}
@@ -447,7 +616,17 @@ export default function AuthForm({ booking }: AuthFormProps) {
               value={bookingImage}
               onChange={setBookingImage}
               selectedFlight={selectedFlight}
-              onFlightSelect={setSelectedFlight}
+              onFlightSelect={(flight) => {
+                setSelectedFlight(flight);
+
+                // Switching to itinerary mode
+                // removes image selection from UI,
+                // but existingBookingImages remains
+                // available for deletion on save.
+                if (flight) {
+                  setBookingImage([]);
+                }
+              }}
             />
           </div>
         </Card>
@@ -458,7 +637,12 @@ export default function AuthForm({ booking }: AuthFormProps) {
 
         <TermsConditions value={terms} onChange={setTerms} />
 
-        <Form.Item style={{ marginTop: 24, marginBottom: 0 }}>
+        <Form.Item
+          style={{
+            marginTop: 24,
+            marginBottom: 0,
+          }}
+        >
           <Row justify="end">
             <Space>
               <Button onClick={handleCancel}>Cancel</Button>
