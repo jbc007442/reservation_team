@@ -31,29 +31,6 @@ export async function POST(req: NextRequest) {
       recursive: true,
     });
 
-    // Delete previous booking image if it exists
-    if (bookingId && folder === 'authform/booking-detail') {
-      const authForm = await AuthForm.findOne({ bookingId });
-
-      if (authForm?.bookingDetails) {
-        const oldImagePath = path.join(
-          process.cwd(),
-          'public',
-          authForm.bookingDetails.replace(/^\/+/, '')
-        );
-
-        try {
-          await fs.access(oldImagePath);
-          await fs.unlink(oldImagePath);
-
-          console.log('Old booking image deleted:', oldImagePath);
-        } catch (err) {
-          // Ignore if file doesn't exist
-          console.log('Old booking image not found.');
-        }
-      }
-    }
-
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
@@ -64,12 +41,40 @@ export async function POST(req: NextRequest) {
 
     await fs.writeFile(savePath, buffer);
 
+    const fileUrl = `/uploads/${folder}/${fileName}`;
+
+    /*
+     * Multiple booking images
+     *
+     * Do NOT delete the previous images here.
+     * Add the newly uploaded image to the existing array.
+     */
+    if (bookingId && folder === 'authform/booking-detail') {
+      const authForm = await AuthForm.findOne({ bookingId });
+
+      if (authForm) {
+        const existingImages: string[] = Array.isArray(authForm.bookingDetails)
+          ? authForm.bookingDetails
+          : authForm.bookingDetails
+            ? [authForm.bookingDetails]
+            : [];
+
+        authForm.bookingDetails = [...existingImages, fileUrl];
+
+        authForm.bookingDetailsType = 'image';
+
+        await authForm.save();
+
+        console.log('Booking image added:', fileUrl);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      url: `/uploads/${folder}/${fileName}`,
+      url: fileUrl,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Upload Error:', error);
 
     return NextResponse.json(
       {
@@ -103,33 +108,42 @@ export async function DELETE(req: NextRequest) {
 
     console.log('Deleting file:', filePath);
 
+    /*
+     * Delete physical file
+     */
     try {
       await fs.unlink(filePath);
 
-      // Optional: clear bookingDetails in MongoDB
-      if (bookingId) {
-        await AuthForm.updateOne(
-          { bookingId },
-          {
-            $set: {
-              bookingDetails: '',
-            },
-          }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: 'File deleted successfully.',
-      });
+      console.log('File deleted:', filePath);
     } catch (err) {
       console.log('File already deleted or not found.');
-
-      return NextResponse.json({
-        success: true,
-        message: 'File already deleted.',
-      });
     }
+
+    /*
+     * Remove only this image from MongoDB
+     */
+    if (bookingId) {
+      const authForm = await AuthForm.findOne({ bookingId });
+
+      if (authForm) {
+        const existingImages: string[] = Array.isArray(authForm.bookingDetails)
+          ? authForm.bookingDetails
+          : authForm.bookingDetails
+            ? [authForm.bookingDetails]
+            : [];
+
+        authForm.bookingDetails = existingImages.filter((imageUrl: string) => imageUrl !== url);
+
+        await authForm.save();
+
+        console.log('Booking image removed from MongoDB:', url);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'File deleted successfully.',
+    });
   } catch (error) {
     console.error('Delete Error:', error);
 
