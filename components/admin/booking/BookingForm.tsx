@@ -1,8 +1,10 @@
 'use client';
+
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+
 import {
   App,
   Button,
@@ -17,10 +19,13 @@ import {
   Space,
   Tabs,
 } from 'antd';
+
 import { useRouter } from 'next/navigation';
 import PhoneInput from 'react-phone-input-2';
+
 // @ts-ignore: CSS module side-effect import without type declarations
 import 'react-phone-input-2/lib/style.css';
+
 const { TextArea } = Input;
 
 interface BookingFormProps {
@@ -31,12 +36,25 @@ interface BookingFormProps {
 
 export default function BookingForm({ booking, onCancel, onSuccess }: BookingFormProps) {
   const [form] = Form.useForm();
+
   const router = useRouter();
   const { user } = useAuthStore();
   const { message } = App.useApp();
+
   const [passengerTypeLocked, setPassengerTypeLocked] = useState(false);
   const isEdit = !!booking;
+
   const [airportOptions, setAirportOptions] = useState<{ value: string; label: string }[]>([]);
+
+  /*
+   * Watch Infant field directly from Ant Design Form.
+   * This makes Infant Details appear immediately when Infant > 0.
+   */
+  const infantCount = Form.useWatch('infant', form) || 0;
+
+  // --------------------------------------------------
+  // Search Airports
+  // --------------------------------------------------
 
   const searchAirports = async (value: string) => {
     if (!value) {
@@ -44,16 +62,26 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
       return;
     }
 
-    const res = await fetch(`/api/airport?q=${encodeURIComponent(value)}`);
-    const data = await res.json();
+    try {
+      const res = await fetch(`/api/airport?q=${encodeURIComponent(value)}`);
 
-    setAirportOptions(
-      data.map((airport: any) => ({
-        value: airport.iata,
-        label: `${airport.city} (${airport.iata}) - ${airport.name}`,
-      }))
-    );
+      const data = await res.json();
+
+      setAirportOptions(
+        data.map((airport: any) => ({
+          value: airport.iata,
+          label: `${airport.city} (${airport.iata}) - ${airport.name}`,
+        }))
+      );
+    } catch (error) {
+      console.error('Airport Search Error:', error);
+      setAirportOptions([]);
+    }
   };
+
+  // --------------------------------------------------
+  // Check Existing Customer
+  // --------------------------------------------------
 
   const checkExistingCustomer = async (mobile: string) => {
     if (!mobile) return;
@@ -80,15 +108,21 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
         setPassengerTypeLocked(false);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Existing Customer Check Error:', err);
     }
   };
+
+  // --------------------------------------------------
+  // Load Booking For Edit
+  // --------------------------------------------------
 
   useEffect(() => {
     if (!booking) {
       form.resetFields();
       return;
     }
+
+    const infants = booking.journey?.infants || 0;
 
     form.setFieldsValue({
       mobile: booking.customer?.mobile,
@@ -104,9 +138,13 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
       toDate: booking.journey?.returnDate ? dayjs(booking.journey.returnDate) : null,
 
       tripType: booking.journey?.tripType || 'roundtrip',
+
       adults: booking.journey?.adults,
       child: booking.journey?.children,
-      infant: booking.journey?.infants,
+      infant: infants,
+
+      // Load saved infant Lap / Seat details
+      infantDetails: booking.journey?.infantDetails || [],
 
       leadSource: booking.callType,
       websites: booking.websites,
@@ -116,6 +154,10 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
       remark: booking.remark,
     });
   }, [booking, form]);
+
+  // --------------------------------------------------
+  // Submit Booking
+  // --------------------------------------------------
 
   const handleFinish = async (values: any) => {
     try {
@@ -130,16 +172,23 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
           mobile: values.mobile,
           email: values.email,
         },
+
         journey: {
           tripType: values.tripType,
           fromCity: values.fromCity,
           toCity: values.toCity,
+
           departureDate: values.fromDate?.toDate(),
           returnDate: values.toDate?.toDate(),
+
           adults: values.adults,
           children: values.child,
           infants: values.infant,
+
+          // Save Infant Lap / Seat details
+          infantDetails: values.infantDetails || [],
         },
+
         callType: values.leadSource,
         websites: values.websites,
         saleType: values.reason,
@@ -156,9 +205,11 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
 
       const res = await fetch(isEdit ? `/api/booking/${booking._id}` : '/api/booking', {
         method: isEdit ? 'PUT' : 'POST',
+
         headers: {
           'Content-Type': 'application/json',
         },
+
         body: JSON.stringify(payload),
       });
 
@@ -176,7 +227,7 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
 
       message.success(isEdit ? 'Booking updated successfully' : 'Booking saved successfully');
 
-      // For edit, just close the dialog and refresh table
+      // For edit, just close dialog and refresh table
       if (isEdit) {
         onSuccess();
         return;
@@ -195,9 +246,14 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
       }, 500);
     } catch (error: any) {
       console.error('Submit Error:', error);
+
       message.error(error.message || 'Failed to save booking');
     }
   };
+
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
 
   return (
     <Form
@@ -212,13 +268,21 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
         adults: 1,
         child: 0,
         infant: 0,
+
+        // Important for new bookings
+        infantDetails: [],
+
         priority: 'General Query',
+
         ...booking,
       }}
     >
       <Card variant="borderless">
         <Row gutter={[12, 0]}>
-          {/* Mobile */}
+          {/* ==========================================
+              Mobile
+          ========================================== */}
+
           <Col xs={24} md={12}>
             <Form.Item
               label="Mobile Number"
@@ -264,38 +328,78 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
-          {/* Email */}
+          {/* ==========================================
+              Email
+          ========================================== */}
+
           <Col xs={24} md={12}>
             <Form.Item
               label="Email Address"
               name="email"
-              rules={[{ type: 'email', message: 'Enter a valid email address' }]}
+              rules={[
+                {
+                  type: 'email',
+                  message: 'Enter a valid email address',
+                },
+              ]}
             >
               <Input placeholder="name@example.com" allowClear />
             </Form.Item>
           </Col>
 
-          {/* Name */}
+          {/* ==========================================
+              Passenger Name
+          ========================================== */}
+
           <Col span={24}>
             <Form.Item label="Passenger Name" required style={{ marginBottom: 16 }}>
               <Space.Compact style={{ width: '100%' }}>
-                <Form.Item name="title" noStyle rules={[{ required: true }]}>
+                <Form.Item
+                  name="title"
+                  noStyle
+                  rules={[
+                    {
+                      required: true,
+                    },
+                  ]}
+                >
                   <Select
                     style={{ width: 90 }}
                     options={[
-                      { value: 'Mr.', label: 'Mr.' },
-                      { value: 'Mrs.', label: 'Mrs.' },
-                      { value: 'Ms.', label: 'Ms.' },
+                      {
+                        value: 'Mr.',
+                        label: 'Mr.',
+                      },
+                      {
+                        value: 'Mrs.',
+                        label: 'Mrs.',
+                      },
+                      {
+                        value: 'Ms.',
+                        label: 'Ms.',
+                      },
                     ]}
                   />
                 </Form.Item>
 
-                <Form.Item name="clientName" noStyle rules={[{ required: true }]}>
+                <Form.Item
+                  name="clientName"
+                  noStyle
+                  rules={[
+                    {
+                      required: true,
+                    },
+                  ]}
+                >
                   <Input placeholder="Name" />
                 </Form.Item>
               </Space.Compact>
             </Form.Item>
           </Col>
+
+          {/* ==========================================
+              Trip Type
+          ========================================== */}
 
           <Col span={24}>
             <Form.Item name="tripType" noStyle>
@@ -322,12 +426,20 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
-          {/* Journey */}
+          {/* ==========================================
+              Leaving From
+          ========================================== */}
+
           <Col xs={24} md={12}>
             <Form.Item
               label="Leaving From"
               name="fromCity"
-              rules={[{ required: true, message: 'Please select departure airport' }]}
+              rules={[
+                {
+                  required: true,
+                  message: 'Please select departure airport',
+                },
+              ]}
             >
               <Select
                 size="large"
@@ -342,11 +454,20 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
+          {/* ==========================================
+              Where To
+          ========================================== */}
+
           <Col xs={24} md={12}>
             <Form.Item
               label="Where To"
               name="toCity"
-              rules={[{ required: true, message: 'Please select destination airport' }]}
+              rules={[
+                {
+                  required: true,
+                  message: 'Please select destination airport',
+                },
+              ]}
             >
               <Select
                 size="large"
@@ -361,11 +482,27 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
+          {/* ==========================================
+              Departure Date
+          ========================================== */}
+
           <Col xs={24} md={12}>
-            <Form.Item label="Departure" name="fromDate" rules={[{ required: true }]}>
+            <Form.Item
+              label="Departure"
+              name="fromDate"
+              rules={[
+                {
+                  required: true,
+                },
+              ]}
+            >
               <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
             </Form.Item>
           </Col>
+
+          {/* ==========================================
+              Return Date
+          ========================================== */}
 
           <Form.Item noStyle shouldUpdate={(prev, curr) => prev.tripType !== curr.tripType}>
             {({ getFieldValue }) =>
@@ -381,58 +518,189 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
                       },
                     ]}
                   >
-                    <DatePicker style={{ width: '100%' }} format="DD-MM-YYYY" />
+                    <DatePicker
+                      style={{
+                        width: '100%',
+                      }}
+                      format="DD-MM-YYYY"
+                    />
                   </Form.Item>
                 </Col>
               )
             }
           </Form.Item>
 
-          {/* Passenger */}
+          {/* ==========================================
+              Passenger
+          ========================================== */}
+
           <Col xs={8}>
             <Form.Item label="Adult" name="adults">
-              <InputNumber min={1} style={{ width: '100%' }} />
+              <InputNumber
+                min={1}
+                style={{
+                  width: '100%',
+                }}
+              />
             </Form.Item>
           </Col>
 
           <Col xs={8}>
             <Form.Item label="Child" name="child">
-              <InputNumber min={0} style={{ width: '100%' }} />
+              <InputNumber
+                min={0}
+                style={{
+                  width: '100%',
+                }}
+              />
             </Form.Item>
           </Col>
+
+          {/* ==========================================
+              Infant
+          ========================================== */}
 
           <Col xs={8}>
             <Form.Item label="Infant" name="infant">
-              <InputNumber min={0} style={{ width: '100%' }} />
+              <InputNumber
+                min={0}
+                style={{
+                  width: '100%',
+                }}
+                onChange={(value) => {
+                  const count = Number(value) || 0;
+
+                  const currentDetails = form.getFieldValue('infantDetails') || [];
+
+                  /*
+                   * If infant count is reduced,
+                   * remove extra infant details.
+                   *
+                   * Example:
+                   * 3 infants -> 1 infant
+                   * keeps only Infant 1.
+                   */
+                  if (count < currentDetails.length) {
+                    form.setFieldValue('infantDetails', currentDetails.slice(0, count));
+                  }
+                }}
+              />
             </Form.Item>
           </Col>
 
-          {/* Lead */}
+          {/* ==========================================
+              Infant Details
+          ========================================== */}
+
+          {infantCount > 0 && (
+            <Col span={24}>
+              <Card
+                size="small"
+                title="Infant Details"
+                style={{
+                  marginBottom: 16,
+                }}
+              >
+                <Row gutter={[12, 0]}>
+                  {Array.from({
+                    length: infantCount,
+                  }).map((_, index) => (
+                    <Col xs={24} md={12} key={index}>
+                      <Form.Item
+                        label={`Infant ${index + 1}`}
+                        name={['infantDetails', index, 'type']}
+                        rules={[
+                          {
+                            required: true,
+                            message: `Please select Infant ${index + 1} type`,
+                          },
+                        ]}
+                      >
+                        <Select
+                          placeholder="Select Infant Type"
+                          options={[
+                            {
+                              value: 'lap',
+                              label: 'Lap',
+                            },
+                            {
+                              value: 'seat',
+                              label: 'Seat',
+                            },
+                          ]}
+                        />
+                      </Form.Item>
+                    </Col>
+                  ))}
+                </Row>
+              </Card>
+            </Col>
+          )}
+
+          {/* ==========================================
+              Call Type
+          ========================================== */}
+
           <Col xs={24} md={12}>
             <Form.Item label="Call Type" name="leadSource">
               <Select
                 placeholder="Select"
                 options={[
-                  { value: 'Buffer', label: 'Buffer' },
-                  { value: 'PPC', label: 'PPC' },
-                  { value: 'Meta', label: 'Meta' },
-                  { value: 'Other', label: 'Other' },
+                  {
+                    value: 'Buffer',
+                    label: 'Buffer',
+                  },
+                  {
+                    value: 'PPC',
+                    label: 'PPC',
+                  },
+                  {
+                    value: 'Meta',
+                    label: 'Meta',
+                  },
+                  {
+                    value: 'Other',
+                    label: 'Other',
+                  },
                 ]}
               />
             </Form.Item>
           </Col>
 
+          {/* ==========================================
+              Meta Websites
+          ========================================== */}
+
           <Form.Item noStyle shouldUpdate={(prev, curr) => prev.leadSource !== curr.leadSource}>
             {({ getFieldValue }) =>
               getFieldValue('leadSource') === 'Meta' && (
                 <Col span={24}>
-                  <Card size="small" title="Meta Websites" style={{ marginBottom: 16 }}>
-                    <Form.Item label="Website" required style={{ marginBottom: 12 }}>
+                  <Card
+                    size="small"
+                    title="Meta Websites"
+                    style={{
+                      marginBottom: 16,
+                    }}
+                  >
+                    <Form.Item
+                      label="Website"
+                      required
+                      style={{
+                        marginBottom: 12,
+                      }}
+                    >
                       <Form.List name="websites">
                         {(fields, { add, remove }) => (
                           <>
                             {fields.map(({ key, name, ...restField }) => (
-                              <Row key={key} gutter={8} align="middle" style={{ marginBottom: 8 }}>
+                              <Row
+                                key={key}
+                                gutter={8}
+                                align="middle"
+                                style={{
+                                  marginBottom: 8,
+                                }}
+                              >
                                 <Col flex="auto">
                                   <Form.Item
                                     {...restField}
@@ -478,37 +746,88 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             }
           </Form.Item>
 
+          {/* ==========================================
+              Passenger Type
+          ========================================== */}
+
           <Form.Item label="Passenger Type" name="reason">
             <Select
               placeholder="Select Passenger Type"
               disabled={passengerTypeLocked}
               options={[
-                { value: 'fresh', label: 'New' },
-                { value: 'repeat', label: 'Existing' },
-                { value: 'referral', label: 'Referral' },
+                {
+                  value: 'fresh',
+                  label: 'New',
+                },
+                {
+                  value: 'repeat',
+                  label: 'Existing',
+                },
+                {
+                  value: 'referral',
+                  label: 'Referral',
+                },
               ]}
             />
           </Form.Item>
+
+          {/* ==========================================
+              Booking Type
+          ========================================== */}
 
           <Col xs={24} md={12}>
             <Form.Item label="Booking Type" name="service">
               <Select
                 placeholder="Select Booking Type"
                 options={[
-                  { value: 'Package', label: 'Package' },
-                  { value: 'Flight', label: 'Flight' },
-                  { value: 'Hotel', label: 'Hotel' },
-                  { value: 'Hotel + Flight', label: 'Hotel + Flight' },
-                  { value: 'Cargo', label: 'Cargo' },
-                  { value: 'Pet', label: 'Pet' },
-                  { value: 'Car', label: 'Car' },
-                  { value: 'Cruise', label: 'Cruise' },
-                  { value: 'Amtrak', label: 'Amtrak' },
-                  { value: 'Other', label: 'Other' },
+                  {
+                    value: 'Package',
+                    label: 'Package',
+                  },
+                  {
+                    value: 'Flight',
+                    label: 'Flight',
+                  },
+                  {
+                    value: 'Hotel',
+                    label: 'Hotel',
+                  },
+                  {
+                    value: 'Hotel + Flight',
+                    label: 'Hotel + Flight',
+                  },
+                  {
+                    value: 'Cargo',
+                    label: 'Cargo',
+                  },
+                  {
+                    value: 'Pet',
+                    label: 'Pet',
+                  },
+                  {
+                    value: 'Car',
+                    label: 'Car',
+                  },
+                  {
+                    value: 'Cruise',
+                    label: 'Cruise',
+                  },
+                  {
+                    value: 'Amtrak',
+                    label: 'Amtrak',
+                  },
+                  {
+                    value: 'Other',
+                    label: 'Other',
+                  },
                 ]}
               />
             </Form.Item>
           </Col>
+
+          {/* ==========================================
+              Remark
+          ========================================== */}
 
           <Col xs={24}>
             <Form.Item label="Remark" name="remark">
@@ -516,11 +835,15 @@ export default function BookingForm({ booking, onCancel, onSuccess }: BookingFor
             </Form.Item>
           </Col>
 
-          {/* Buttons */}
+          {/* ==========================================
+              Buttons
+          ========================================== */}
+
           <Col span={24}>
             <div className="flex justify-end">
               <Space>
                 <Button onClick={onCancel}>Cancel</Button>
+
                 <Button type="primary" htmlType="submit">
                   {isEdit ? 'Update Booking' : 'Save Booking'}
                 </Button>

@@ -1,59 +1,31 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Card, Col, Input, Row, Table, Tag } from 'antd';
-import { DownloadOutlined, SearchOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { Avatar, Card, Col, Input, Row, Table } from 'antd';
 
-interface Employee {
+import { SearchOutlined } from '@ant-design/icons';
+
+import { useRouter } from 'next/navigation';
+
+interface User {
   _id: string;
-  employeeId?: string;
   name: string;
   email?: string;
-}
-
-interface Session {
-  checkIn: string | null;
-  checkOut: string | null;
-  currentStatus: 'Working' | 'On Break' | 'Checked Out';
-  lastActivityAt: string | null;
-  workingMinutes: number;
-  breakMinutes: number;
-  autoLogoutAt?: string | null;
-}
-
-interface AttendanceRecord {
-  _id: string;
-  employee: Employee;
-  date: string;
-
-  am: Session;
-  pm: Session;
-
-  // Combined AM + PM totals from API
-  workingMinutes: number;
-  breakMinutes: number;
-
-  currentStatus: 'Working' | 'On Break' | 'Checked Out';
-
-  status: 'Present' | 'Absent' | 'Half Day' | 'Leave' | 'Holiday' | 'Weekly Off';
-
-  createdAt?: string;
-  updatedAt?: string;
+  avatar?: string;
 }
 
 export default function Daily() {
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const router = useRouter();
+
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
 
-  /*
-  |--------------------------------------------------------------------------
-  | Fetch Attendance
-  |--------------------------------------------------------------------------
-  */
+  // ------------------------------------------
+  // Fetch Users
+  // ------------------------------------------
 
-  const fetchAttendance = async () => {
+  const fetchUsers = async () => {
     try {
       setLoading(true);
 
@@ -70,355 +42,70 @@ export default function Daily() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Failed to fetch attendance.');
+        throw new Error(result.message || 'Failed to fetch users.');
       }
 
-      setAttendance(result.data || []);
+      setUsers(result.data || []);
     } catch (error) {
-      console.error('Attendance fetch error:', error);
+      console.error('Fetch Users Error:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
   };
 
-  /*
-  |--------------------------------------------------------------------------
-  | Initial / Search Load
-  |--------------------------------------------------------------------------
-  */
+  // ------------------------------------------
+  // Load Users
+  // ------------------------------------------
 
   useEffect(() => {
-    fetchAttendance();
+    fetchUsers();
   }, [search]);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Format Time
-  |--------------------------------------------------------------------------
-  */
-
-  const formatTime = (value: string | null) => {
-    if (!value) {
-      return '--';
-    }
-
-    return dayjs(value).format('hh:mm A');
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Format Working Time
-  |--------------------------------------------------------------------------
-  */
-
-  const formatWorkingTime = (minutes: number) => {
-    if (!minutes || minutes < 0) {
-      return '00h 00m';
-    }
-
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-
-    return `${String(hours).padStart(2, '0')}h ${String(mins).padStart(2, '0')}m`;
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Session Status Color
-  |--------------------------------------------------------------------------
-  */
-
-  const getCurrentStatusColor = (status: Session['currentStatus']) => {
-    switch (status) {
-      case 'Working':
-        return 'blue';
-
-      case 'On Break':
-        return 'orange';
-
-      case 'Checked Out':
-        return 'green';
-
-      default:
-        return 'default';
-    }
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Attendance Status Color
-  |--------------------------------------------------------------------------
-  */
-
-  const getStatusColor = (status: AttendanceRecord['status']) => {
-    switch (status) {
-      case 'Present':
-        return 'green';
-
-      case 'Absent':
-        return 'red';
-
-      case 'Half Day':
-        return 'orange';
-
-      case 'Leave':
-        return 'purple';
-
-      case 'Holiday':
-        return 'cyan';
-
-      case 'Weekly Off':
-        return 'default';
-
-      default:
-        return 'default';
-    }
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Session Status
-  |--------------------------------------------------------------------------
-  */
-
-  const renderSessionStatus = (session?: Session) => {
-    if (!session) {
-      return <Tag>Checked Out</Tag>;
-    }
-
-    return <Tag color={getCurrentStatusColor(session.currentStatus)}>{session.currentStatus}</Tag>;
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Table Columns
-  |--------------------------------------------------------------------------
-  */
+  // ------------------------------------------
+  // Table Columns
+  // ------------------------------------------
 
   const columns = [
-    /*
-    |--------------------------------------------------------------------------
-    | Employee
-    |--------------------------------------------------------------------------
-    */
-
-    {
-      title: 'Employee ID',
-      key: 'employeeId',
-      width: 130,
-
-      render: (_: unknown, record: AttendanceRecord) => record.employee?.employeeId || '--',
-    },
-
     {
       title: 'Employee',
       key: 'employee',
-      width: 200,
+      render: (_: unknown, record: User) => (
+        <div className="flex items-center gap-3">
+          <Avatar size={48} className="bg-[#0f172a] text-white">
+            {record.name
+              .trim()
+              .split(/\s+/)
+              .slice(0, 2)
+              .map((word) => word.charAt(0))
+              .join('')
+              .toUpperCase()}
+          </Avatar>
 
-      render: (_: unknown, record: AttendanceRecord) => (
-        <span className="font-medium text-slate-700">{record.employee?.name || '--'}</span>
-      ),
-    },
+          <div>
+            <div className="font-medium text-slate-800">{record.name}</div>
 
-    /*
-    |--------------------------------------------------------------------------
-    | AM
-    |--------------------------------------------------------------------------
-    */
-
-    {
-      title: 'AM',
-      children: [
-        {
-          title: 'Check In',
-          key: 'amCheckIn',
-          width: 120,
-
-          render: (_: unknown, record: AttendanceRecord) => formatTime(record.am?.checkIn || null),
-        },
-
-        {
-          title: 'Check Out',
-          key: 'amCheckOut',
-          width: 120,
-
-          render: (_: unknown, record: AttendanceRecord) => formatTime(record.am?.checkOut || null),
-        },
-
-        {
-          title: 'Working',
-          key: 'amWorking',
-          width: 115,
-
-          render: (_: unknown, record: AttendanceRecord) =>
-            formatWorkingTime(record.am?.workingMinutes || 0),
-        },
-
-        {
-          title: 'Break',
-          key: 'amBreak',
-          width: 115,
-
-          render: (_: unknown, record: AttendanceRecord) =>
-            formatWorkingTime(record.am?.breakMinutes || 0),
-        },
-
-        {
-          title: 'Status',
-          key: 'amStatus',
-          width: 130,
-
-          render: (_: unknown, record: AttendanceRecord) => renderSessionStatus(record.am),
-        },
-      ],
-    },
-
-    /*
-    |--------------------------------------------------------------------------
-    | PM
-    |--------------------------------------------------------------------------
-    */
-
-    {
-      title: 'PM',
-      children: [
-        {
-          title: 'Check In',
-          key: 'pmCheckIn',
-          width: 120,
-
-          render: (_: unknown, record: AttendanceRecord) => formatTime(record.pm?.checkIn || null),
-        },
-
-        {
-          title: 'Check Out',
-          key: 'pmCheckOut',
-          width: 120,
-
-          render: (_: unknown, record: AttendanceRecord) => formatTime(record.pm?.checkOut || null),
-        },
-
-        {
-          title: 'Working',
-          key: 'pmWorking',
-          width: 115,
-
-          render: (_: unknown, record: AttendanceRecord) =>
-            formatWorkingTime(record.pm?.workingMinutes || 0),
-        },
-
-        {
-          title: 'Break',
-          key: 'pmBreak',
-          width: 115,
-
-          render: (_: unknown, record: AttendanceRecord) =>
-            formatWorkingTime(record.pm?.breakMinutes || 0),
-        },
-
-        {
-          title: 'Status',
-          key: 'pmStatus',
-          width: 130,
-
-          render: (_: unknown, record: AttendanceRecord) => renderSessionStatus(record.pm),
-        },
-      ],
-    },
-
-    /*
-    |--------------------------------------------------------------------------
-    | Daily Total
-    |--------------------------------------------------------------------------
-    |
-    | These values come from:
-    |
-    | AM working + PM working
-    | AM break   + PM break
-    |
-    */
-
-    {
-      title: 'Daily Total',
-      children: [
-        {
-          title: 'Working',
-          key: 'totalWorking',
-          width: 125,
-
-          render: (_: unknown, record: AttendanceRecord) =>
-            formatWorkingTime(
-              record.workingMinutes ||
-                (record.am?.workingMinutes || 0) + (record.pm?.workingMinutes || 0)
-            ),
-        },
-
-        {
-          title: 'Break',
-          key: 'totalBreak',
-          width: 125,
-
-          render: (_: unknown, record: AttendanceRecord) =>
-            formatWorkingTime(
-              record.breakMinutes || (record.am?.breakMinutes || 0) + (record.pm?.breakMinutes || 0)
-            ),
-        },
-
-        {
-          title: 'Status',
-          key: 'currentStatus',
-          width: 130,
-
-          render: (_: unknown, record: AttendanceRecord) => (
-            <Tag color={getCurrentStatusColor(record.currentStatus)}>{record.currentStatus}</Tag>
-          ),
-        },
-      ],
-    },
-
-    /*
-    |--------------------------------------------------------------------------
-    | Attendance
-    |--------------------------------------------------------------------------
-    */
-
-    {
-      title: 'Attendance',
-      dataIndex: 'status',
-      key: 'status',
-      width: 130,
-      align: 'center' as const,
-
-      render: (status: AttendanceRecord['status']) => (
-        <Tag color={getStatusColor(status)}>{status}</Tag>
+            {record.email && <div className="mt-1 text-sm text-slate-500">{record.email}</div>}
+          </div>
+        </div>
       ),
     },
   ];
 
-  /*
-  |--------------------------------------------------------------------------
-  | UI
-  |--------------------------------------------------------------------------
-  */
+  // ------------------------------------------
+  // UI
+  // ------------------------------------------
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900">Daily Attendance</h1>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Daily Attendance</h1>
-
-          <p className="mt-1 text-slate-500">Monitor employee AM and PM attendance.</p>
-        </div>
-
-        <Button type="primary" icon={<DownloadOutlined />}>
-          Export
-        </Button>
+        <p className="mt-1 text-slate-500">Select an employee to view attendance.</p>
       </div>
 
-      {/* Filters */}
-
+      {/* Search */}
       <Card className="rounded-xl">
         <Row gutter={[16, 16]}>
           <Col xs={24} md={10} lg={8}>
@@ -426,7 +113,7 @@ export default function Daily() {
               size="large"
               allowClear
               prefix={<SearchOutlined className="text-slate-400" />}
-              placeholder="Search employee or ID..."
+              placeholder="Search employee..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -434,26 +121,30 @@ export default function Daily() {
         </Row>
       </Card>
 
-      {/* Table */}
-
+      {/* Employees */}
       <Card
-        title={<span className="text-lg font-semibold">Today's Attendance</span>}
+        title={<span className="text-lg font-semibold">Employees</span>}
         className="overflow-hidden rounded-xl"
       >
-        <Table<AttendanceRecord>
+        <Table<User>
           rowKey="_id"
           columns={columns}
-          dataSource={attendance}
+          dataSource={users}
           loading={loading}
-          bordered
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
             pageSizeOptions: ['10', '25', '50', '100'],
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`,
           }}
-          scroll={{
-            x: 2200,
-          }}
+          onRow={(record) => ({
+            onClick: () => {
+              router.push(`/admin/attendance/daily/${record._id}`);
+            },
+            style: {
+              cursor: 'pointer',
+            },
+          })}
         />
       </Card>
     </div>

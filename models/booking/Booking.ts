@@ -19,6 +19,11 @@ export interface IBooking extends Document {
     adults: number;
     children: number;
     infants: number;
+
+    // Infant seating details
+    infantDetails?: {
+      type: 'lap' | 'seat';
+    }[];
   };
 
   service:
@@ -71,16 +76,19 @@ const BookingSchema = new Schema<IBooking>(
         type: String,
         trim: true,
       },
+
       name: {
         type: String,
         required: true,
         trim: true,
       },
+
       mobile: {
         type: String,
         required: true,
         trim: true,
       },
+
       email: {
         type: String,
         lowercase: true,
@@ -135,6 +143,16 @@ const BookingSchema = new Schema<IBooking>(
         default: 0,
         min: 0,
       },
+
+      // Infant seating details
+      infantDetails: [
+        {
+          type: {
+            type: String,
+            enum: ['lap', 'seat'],
+          },
+        },
+      ],
     },
 
     service: {

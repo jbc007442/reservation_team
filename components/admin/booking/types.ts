@@ -28,6 +28,7 @@ export type SaleType = 'fresh' | 'repeat' | 'referral';
 
 export interface Booking {
   _id: string;
+
   bookingNo: string;
 
   customer: {
@@ -42,9 +43,15 @@ export interface Booking {
     toCity: string;
     departureDate: string;
     returnDate?: string;
+
     adults: number;
     children: number;
     infants: number;
+
+    // Infant seating details
+    infantDetails?: {
+      type: 'lap' | 'seat';
+    }[];
   };
 
   service: BookingService;
@@ -72,5 +79,6 @@ export interface Booking {
   };
 
   createdAt: string;
+
   updatedAt: string;
 }

@@ -1,12 +1,7 @@
 'use client';
 
-import { Button, Card, Divider, Empty, Typography } from 'antd';
-import {
-  FileTextOutlined,
-  PlusOutlined,
-  UserOutlined,
-  CheckCircleOutlined,
-} from '@ant-design/icons';
+import { Card, Divider } from 'antd';
+import { FileTextOutlined, UserOutlined, CheckCircleOutlined } from '@ant-design/icons';
 
 import { Booking } from '@/components/admin/booking/types';
 import NotePost from './NotePost';
@@ -109,6 +104,7 @@ interface AuthSidebarProps {
 
 export default function AuthSidebar({ booking }: AuthSidebarProps) {
   const status = statusConfig[booking.status];
+
   return (
     <div className="sticky top-6">
       <Card
@@ -119,10 +115,11 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
           },
         }}
       >
-        {/* Query Information */}
+        {/* Booking Information */}
         <div>
           <div className="mb-3 flex items-center gap-2">
             <FileTextOutlined className="text-base text-blue-600" />
+
             <h3 className="m-0 text-sm font-semibold text-slate-800">Booking Information</h3>
           </div>
 
@@ -172,6 +169,25 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
                 value={`${booking.journey.adults} ADT • ${booking.journey.children} CHD • ${booking.journey.infants} INF`}
               />
 
+              {/* Infant Details */}
+              {booking.journey.infants > 0 && booking.journey.infantDetails?.length ? (
+                <InfoRow
+                  label="Infants"
+                  value={
+                    <div className="space-y-1">
+                      {booking.journey.infantDetails.map((infant, index) => (
+                        <div key={index}>
+                          Infant {index + 1}:{' '}
+                          <span className="font-semibold">
+                            {infant.type === 'lap' ? 'Lap' : 'Seat'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  }
+                />
+              ) : null}
+
               <InfoRow label="Sale Type" value={booking.saleType || '-'} />
 
               <InfoRow label="Status" value={booking.status.replace(/_/g, ' ').toUpperCase()} />
@@ -183,10 +199,11 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
 
         <Divider className="my-4" />
 
-        {/* Customer */}
+        {/* Customer Information */}
         <div>
           <div className="mb-3 flex items-center gap-2">
             <UserOutlined className="text-base text-blue-600" />
+
             <h3 className="m-0 text-sm font-semibold text-slate-800">Customer Information</h3>
           </div>
 
@@ -206,6 +223,7 @@ export default function AuthSidebar({ booking }: AuthSidebarProps) {
 
         <Divider className="my-4" />
 
+        {/* Status */}
         <div className={`rounded-md border p-3 ${status.border} ${status.bg}`}>
           <div className="flex items-start gap-2">
             {status.icon}
