@@ -1,150 +1,908 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from 'react';
-import { Avatar, Card, Col, Input, Row, Table } from 'antd';
+import {
+  Avatar,
+  Card,
+  Col,
+  DatePicker,
+  Input,
+  Row,
+  Segmented,
+  Table,
+  Tag,
+  Button,
+  Tooltip,
+} from 'antd';
 
-import { SearchOutlined } from '@ant-design/icons';
+import {
+  SearchOutlined,
+  LeftOutlined,
+  RightOutlined,
+  CalendarOutlined,
+  FileExcelOutlined,
+} from '@ant-design/icons';
 
-import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
+
+import dayjs, { Dayjs } from 'dayjs';
 
 interface User {
   _id: string;
+  employeeId?: string;
   name: string;
   email?: string;
   avatar?: string;
+  department?: string;
+  designation?: string;
 }
 
-export default function Daily() {
-  const router = useRouter();
+interface AttendanceSession {
+  checkIn: string | null;
+  checkOut: string | null;
+  workingMinutes: number;
+  breakMinutes: number;
+  currentStatus: string;
+  lastActivityAt?: string | null;
+  autoLogoutAt?: string | null;
+}
 
-  const [users, setUsers] = useState<User[]>([]);
+interface AttendanceDay {
+  status: string;
+  currentStatus: string;
+  workingMinutes: number;
+  breakMinutes: number;
+  am: AttendanceSession | null;
+  pm: AttendanceSession | null;
+}
+
+interface RosterUser {
+  employee: User;
+  attendance: Record<string, AttendanceDay>;
+}
+
+type ViewMode = 'Daily' | 'Weekly' | 'Monthly';
+
+export default function Daily() {
+  const [roster, setRoster] = useState<RosterUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('Weekly');
+  const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
 
-  // ------------------------------------------
-  // Fetch Users
-  // ------------------------------------------
+  /*
+  |--------------------------------------------------------------------------
+  | Get Roster Date Range
+  |--------------------------------------------------------------------------
+  */
 
-  const fetchUsers = async () => {
+  const getRosterRange = () => {
+    if (viewMode === 'Daily') {
+      return {
+        from: selectedDate.format('YYYY-MM-DD'),
+        to: selectedDate.format('YYYY-MM-DD'),
+      };
+    }
+
+    if (viewMode === 'Weekly') {
+      const start = selectedDate.startOf('week').add(1, 'day');
+      const end = start.add(6, 'day');
+
+      return {
+        from: start.format('YYYY-MM-DD'),
+        to: end.format('YYYY-MM-DD'),
+      };
+    }
+
+    return {
+      from: selectedDate.startOf('month').format('YYYY-MM-DD'),
+      to: selectedDate.endOf('month').format('YYYY-MM-DD'),
+    };
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Fetch Roster
+  |--------------------------------------------------------------------------
+  */
+
+  const fetchRoster = async () => {
     try {
       setLoading(true);
 
+      const { from, to } = getRosterRange();
+
       const params = new URLSearchParams();
+
+      params.set('from', from);
+      params.set('to', to);
 
       if (search.trim()) {
         params.set('search', search.trim());
       }
 
-      const response = await fetch(`/api/admin/attendance/daily?${params.toString()}`, {
+      const response = await fetch(`/api/admin/attendance/roasters?${params.toString()}`, {
         cache: 'no-store',
       });
 
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Failed to fetch users.');
+        throw new Error(result.message || 'Failed to fetch roster.');
       }
 
-      setUsers(result.data || []);
+      setRoster(result.data || []);
     } catch (error) {
-      console.error('Fetch Users Error:', error);
-      setUsers([]);
+      console.error('Fetch Roster Error:', error);
+      setRoster([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // ------------------------------------------
-  // Load Users
-  // ------------------------------------------
+  /*
+  |--------------------------------------------------------------------------
+  | Load Data
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
-    fetchUsers();
-  }, [search]);
+    fetchRoster();
+  }, [search, viewMode, selectedDate]);
 
-  // ------------------------------------------
-  // Table Columns
-  // ------------------------------------------
+  /*
+  |--------------------------------------------------------------------------
+  | Date Navigation
+  |--------------------------------------------------------------------------
+  */
 
-  const columns = [
-    {
-      title: 'Employee',
-      key: 'employee',
-      render: (_: unknown, record: User) => (
-        <div className="flex items-center gap-3">
-          <Avatar size={48} className="bg-[#0f172a] text-white">
-            {record.name
-              .trim()
-              .split(/\s+/)
-              .slice(0, 2)
-              .map((word) => word.charAt(0))
-              .join('')
-              .toUpperCase()}
-          </Avatar>
+  const previousPeriod = () => {
+    if (viewMode === 'Daily') {
+      setSelectedDate(selectedDate.subtract(1, 'day'));
+      return;
+    }
 
-          <div>
-            <div className="font-medium text-slate-800">{record.name}</div>
+    if (viewMode === 'Weekly') {
+      setSelectedDate(selectedDate.subtract(1, 'week'));
+      return;
+    }
 
-            {record.email && <div className="mt-1 text-sm text-slate-500">{record.email}</div>}
+    setSelectedDate(selectedDate.subtract(1, 'month'));
+  };
+
+  const nextPeriod = () => {
+    if (viewMode === 'Daily') {
+      setSelectedDate(selectedDate.add(1, 'day'));
+      return;
+    }
+
+    if (viewMode === 'Weekly') {
+      setSelectedDate(selectedDate.add(1, 'week'));
+      return;
+    }
+
+    setSelectedDate(selectedDate.add(1, 'month'));
+  };
+
+  const goToday = () => {
+    setSelectedDate(dayjs());
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Date Label
+  |--------------------------------------------------------------------------
+  */
+
+  const getDateLabel = () => {
+    if (viewMode === 'Daily') {
+      return selectedDate.format('DD MMM YYYY');
+    }
+
+    if (viewMode === 'Weekly') {
+      const start = selectedDate.startOf('week').add(1, 'day');
+
+      const end = start.add(6, 'day');
+
+      return `${start.format('DD MMM')} - ${end.format('DD MMM YYYY')}`;
+    }
+
+    return selectedDate.format('MMMM YYYY');
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Weekly Dates
+  |--------------------------------------------------------------------------
+  */
+
+  const getWeekDates = () => {
+    const start = selectedDate.startOf('week').add(1, 'day');
+
+    return Array.from({ length: 7 }, (_, index) => start.add(index, 'day'));
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Monthly Dates
+  |--------------------------------------------------------------------------
+  */
+
+  const getMonthDates = () => {
+    const start = selectedDate.startOf('month');
+    const days = selectedDate.daysInMonth();
+
+    return Array.from({ length: days }, (_, index) => start.add(index, 'day'));
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Get Attendance
+  |--------------------------------------------------------------------------
+  */
+
+  const getAttendance = (record: RosterUser, date: Dayjs): AttendanceDay | null => {
+    return record.attendance?.[date.format('YYYY-MM-DD')] || null;
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Format Working Time
+  |--------------------------------------------------------------------------
+  */
+
+  const formatWorkingTime = (minutes: number) => {
+    const safeMinutes = Math.max(0, Number(minutes || 0));
+
+    const hours = Math.floor(safeMinutes / 60);
+
+    const remainingMinutes = safeMinutes % 60;
+
+    return `${hours}h ${remainingMinutes}m`;
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Status Configuration
+  |--------------------------------------------------------------------------
+  */
+
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'Present':
+      case 'P':
+        return {
+          label: 'P',
+          description: 'Present',
+          className: 'bg-green-100 text-green-700 border-green-200',
+        };
+
+      case 'Half Day':
+      case 'HD':
+        return {
+          label: 'HD',
+          description: 'Half Day',
+          className: 'bg-orange-100 text-orange-700 border-orange-200',
+        };
+
+      case 'Short Login':
+      case 'SL':
+        return {
+          label: 'SL',
+          description: 'Short Login',
+          className: 'bg-blue-100 text-blue-700 border-blue-200',
+        };
+
+      case 'Absent':
+      case 'A':
+        return {
+          label: 'A',
+          description: 'Absent',
+          className: 'bg-red-100 text-red-700 border-red-200',
+        };
+
+      case 'Leave':
+      case 'L':
+        return {
+          label: 'L',
+          description: 'Leave',
+          className: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+        };
+
+      case 'Week Off':
+      case 'WO':
+        return {
+          label: 'WO',
+          description: 'Week Off',
+          className: 'bg-slate-100 text-slate-500 border-slate-200',
+        };
+
+      case 'Holiday':
+      case 'H':
+        return {
+          label: 'H',
+          description: 'Holiday',
+          className: 'bg-purple-100 text-purple-700 border-purple-200',
+        };
+
+      case 'Not Marked':
+      default:
+        return {
+          label: '-',
+          description: 'Not Marked',
+          className: 'bg-slate-100 text-slate-400 border-slate-200',
+        };
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Status UI
+  |--------------------------------------------------------------------------
+  */
+
+  const renderStatus = (date: Dayjs, record: RosterUser) => {
+    const attendance = getAttendance(record, date);
+
+    if (!attendance) {
+      return (
+        <div className="flex justify-center">
+          <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-slate-100 px-2 text-xs font-semibold text-slate-400">
+            -
+          </span>
+        </div>
+      );
+    }
+
+    const config = getStatusConfig(attendance.status);
+
+    return (
+      <div className="flex justify-center">
+        <Tooltip title={`${config.description} • ${formatWorkingTime(attendance.workingMinutes)}`}>
+          <span
+            className={`flex h-8 min-w-8 cursor-default items-center justify-center rounded-lg border px-1.5 text-xs font-bold ${config.className}`}
+          >
+            {config.label}
+          </span>
+        </Tooltip>
+      </div>
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Employee Column
+  |--------------------------------------------------------------------------
+  */
+
+  const employeeColumn = {
+    title: 'Employee',
+    key: 'employee',
+    fixed: 'left' as const,
+    width: 260,
+
+    render: (_: unknown, record: RosterUser) => (
+      <div className="flex items-center gap-3">
+        <Avatar size={42} src={record.employee.avatar} className="bg-slate-900 text-white">
+          {record.employee.name
+            .trim()
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((word) => word.charAt(0))
+            .join('')
+            .toUpperCase()}
+        </Avatar>
+
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-slate-800">{record.employee.name}</div>
+
+          <div className="mt-0.5 text-xs text-slate-400">
+            {record.employee.employeeId || record.employee.designation || ''}
           </div>
         </div>
+      </div>
+    ),
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Daily Columns
+  |--------------------------------------------------------------------------
+  */
+
+  const getDailyColumns = () => [
+    employeeColumn,
+
+    {
+      title: (
+        <div className="text-center">
+          <div className="text-xs text-slate-400">{selectedDate.format('dddd')}</div>
+
+          <div className="mt-1 font-semibold text-slate-700">{selectedDate.format('DD MMM')}</div>
+        </div>
       ),
+
+      key: selectedDate.format('YYYY-MM-DD'),
+
+      align: 'center' as const,
+      width: 160,
+
+      render: (_: unknown, record: RosterUser) => renderStatus(selectedDate, record),
+    },
+
+    {
+      title: 'Details',
+      key: 'details',
+      align: 'center' as const,
+      width: 200,
+
+      render: (_: unknown, record: RosterUser) => {
+        const attendance = getAttendance(record, selectedDate);
+
+        if (!attendance) {
+          return <Tag className="rounded-full">Not Marked</Tag>;
+        }
+
+        const config = getStatusConfig(attendance.status);
+
+        return (
+          <div className="text-xs text-slate-500">
+            <div className="flex items-center justify-center gap-2">
+              <span className="font-medium text-slate-700">{config.description}</span>
+
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${config.className}`}
+              >
+                {config.label}
+              </span>
+            </div>
+
+            <div className="mt-1">{formatWorkingTime(attendance.workingMinutes)}</div>
+
+            {attendance.breakMinutes > 0 && (
+              <div className="mt-0.5 text-[11px] text-slate-400">
+                Break: {formatWorkingTime(attendance.breakMinutes)}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
-  // ------------------------------------------
-  // UI
-  // ------------------------------------------
+  /*
+  |--------------------------------------------------------------------------
+  | Weekly Columns
+  |--------------------------------------------------------------------------
+  */
+
+  const getWeeklyColumns = () => [
+    employeeColumn,
+
+    ...getWeekDates().map((date) => ({
+      title: (
+        <div className="text-center">
+          <div className="text-xs font-medium text-slate-400">{date.format('ddd')}</div>
+
+          <div
+            className={`mt-1 text-sm font-semibold ${
+              date.isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-slate-700'
+            }`}
+          >
+            {date.format('DD')}
+          </div>
+        </div>
+      ),
+
+      key: date.format('YYYY-MM-DD'),
+
+      width: 90,
+
+      align: 'center' as const,
+
+      render: (_: unknown, record: RosterUser) => renderStatus(date, record),
+    })),
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Monthly Columns
+  |--------------------------------------------------------------------------
+  */
+
+  const getMonthlyColumns = () => [
+    employeeColumn,
+
+    ...getMonthDates().map((date) => ({
+      title: (
+        <div className="text-center">
+          <div className="text-[10px] font-medium text-slate-400">{date.format('ddd')}</div>
+
+          <div
+            className={`mt-1 text-xs font-semibold ${
+              date.isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-slate-700'
+            }`}
+          >
+            {date.format('DD')}
+          </div>
+        </div>
+      ),
+
+      key: date.format('YYYY-MM-DD'),
+
+      width: 58,
+
+      align: 'center' as const,
+
+      render: (_: unknown, record: RosterUser) => renderStatus(date, record),
+    })),
+  ];
+
+  /*
+  |--------------------------------------------------------------------------
+  | Columns
+  |--------------------------------------------------------------------------
+  */
+
+  const columns =
+    viewMode === 'Daily'
+      ? getDailyColumns()
+      : viewMode === 'Weekly'
+        ? getWeeklyColumns()
+        : getMonthlyColumns();
+
+  /*
+  |--------------------------------------------------------------------------
+  | UI
+  |--------------------------------------------------------------------------
+  */
+
+  /*
+|--------------------------------------------------------------------------
+| Export Excel
+|--------------------------------------------------------------------------
+*/
+
+  const exportToExcel = () => {
+    const rows: Record<string, string | number>[] = [];
+
+    if (viewMode === 'Daily') {
+      const dateKey = selectedDate.format('YYYY-MM-DD');
+
+      roster.forEach((record) => {
+        const attendance = record.attendance?.[dateKey];
+
+        rows.push({
+          Employee: record.employee.name,
+          'Employee ID': record.employee.employeeId || '',
+          Department: record.employee.department || '',
+          Designation: record.employee.designation || '',
+          Date: selectedDate.format('DD MMM YYYY'),
+          Status: attendance?.status || 'Not Marked',
+          'Working Time': attendance ? formatWorkingTime(attendance.workingMinutes) : '0h 0m',
+          'Break Time': attendance ? formatWorkingTime(attendance.breakMinutes) : '0h 0m',
+          'Current Status': attendance?.currentStatus || 'Checked Out',
+        });
+      });
+    }
+
+    if (viewMode === 'Weekly') {
+      const weekDates = getWeekDates();
+
+      roster.forEach((record) => {
+        const row: Record<string, string | number> = {
+          Employee: record.employee.name,
+          'Employee ID': record.employee.employeeId || '',
+          Department: record.employee.department || '',
+          Designation: record.employee.designation || '',
+        };
+
+        weekDates.forEach((date) => {
+          const dateKey = date.format('YYYY-MM-DD');
+          const attendance = record.attendance?.[dateKey];
+
+          row[date.format('DD MMM')] = attendance?.status || 'Not Marked';
+        });
+
+        rows.push(row);
+      });
+    }
+
+    if (viewMode === 'Monthly') {
+      const monthDates = getMonthDates();
+
+      roster.forEach((record) => {
+        const row: Record<string, string | number> = {
+          Employee: record.employee.name,
+          'Employee ID': record.employee.employeeId || '',
+          Department: record.employee.department || '',
+          Designation: record.employee.designation || '',
+        };
+
+        monthDates.forEach((date) => {
+          const dateKey = date.format('YYYY-MM-DD');
+          const attendance = record.attendance?.[dateKey];
+
+          row[date.format('DD MMM')] = attendance?.status || 'Not Marked';
+        });
+
+        rows.push(row);
+      });
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance Roster');
+
+    /*
+  |--------------------------------------------------------------------------
+  | Column Widths
+  |--------------------------------------------------------------------------
+  */
+
+    worksheet['!cols'] = [
+      { wch: 24 },
+      { wch: 22 },
+      { wch: 20 },
+      { wch: 22 },
+      ...Object.keys(rows[0] || {})
+        .slice(4)
+        .map(() => ({ wch: 16 })),
+    ];
+
+    /*
+  |--------------------------------------------------------------------------
+  | File Name
+  |--------------------------------------------------------------------------
+  */
+
+    const fileName =
+      viewMode === 'Daily'
+        ? `Attendance-${selectedDate.format('DD-MM-YYYY')}.xlsx`
+        : viewMode === 'Weekly'
+          ? `Attendance-${getDateLabel().replace(/[^a-zA-Z0-9-]/g, '_')}.xlsx`
+          : `Attendance-${selectedDate.format('MMMM-YYYY')}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
+  };
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Daily Attendance</h1>
 
-        <p className="mt-1 text-slate-500">Select an employee to view attendance.</p>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Attendance Roster</h1>
+
+        <p className="mt-1 text-slate-500">
+          Manage and review employee attendance by day, week, or month.
+        </p>
       </div>
 
-      {/* Search */}
-      <Card className="rounded-xl">
-        <Row gutter={[16, 16]}>
-          <Col xs={24} md={10} lg={8}>
-            <Input
-              size="large"
-              allowClear
-              prefix={<SearchOutlined className="text-slate-400" />}
-              placeholder="Search employee..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </Col>
-        </Row>
+      {/* Controls */}
+
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <div className="flex flex-col gap-5">
+          <Row gutter={[16, 16]} align="middle">
+            {/* Search */}
+
+            <Col xs={24} md={9} lg={7}>
+              <Input
+                size="large"
+                allowClear
+                prefix={<SearchOutlined className="text-slate-400" />}
+                placeholder="Search employee..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="rounded-lg"
+              />
+            </Col>
+
+            {/* View */}
+
+            <Col xs={24} md={8} lg={7}>
+              <Segmented
+                block
+                size="large"
+                value={viewMode}
+                onChange={(value) => setViewMode(value as ViewMode)}
+                options={[
+                  {
+                    label: 'Daily',
+                    value: 'Daily',
+                  },
+                  {
+                    label: 'Weekly',
+                    value: 'Weekly',
+                  },
+                  {
+                    label: 'Monthly',
+                    value: 'Monthly',
+                  },
+                ]}
+              />
+            </Col>
+
+            {/* Date */}
+
+            <Col xs={24} md={7} lg={6}>
+              <DatePicker
+                size="large"
+                value={selectedDate}
+                onChange={(date) => {
+                  if (date) {
+                    setSelectedDate(date);
+                  }
+                }}
+                picker={viewMode === 'Monthly' ? 'month' : 'date'}
+                format={viewMode === 'Monthly' ? 'MMMM YYYY' : 'DD MMM YYYY'}
+                className="w-full rounded-lg"
+                suffixIcon={<CalendarOutlined />}
+              />
+            </Col>
+
+            {/* Today */}
+
+            <Col xs={24} md={24} lg={4}>
+              <Button size="large" block onClick={goToday} className="rounded-lg">
+                Today
+              </Button>
+            </Col>
+
+            {/* Export Excel */}
+
+            <Col xs={24} md={24} lg={4}>
+              <Button
+                size="large"
+                block
+                icon={<FileExcelOutlined />}
+                onClick={exportToExcel}
+                className="rounded-lg"
+              >
+                Export Excel
+              </Button>
+            </Col>
+          </Row>
+
+          {/* Navigation */}
+
+          <div className="flex flex-col gap-4 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-medium text-slate-400">{viewMode} View</div>
+
+              <div className="mt-1 text-xl font-bold text-slate-900">{getDateLabel()}</div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="large"
+                icon={<LeftOutlined />}
+                onClick={previousPeriod}
+                className="rounded-lg"
+              />
+
+              <Button
+                size="large"
+                icon={<RightOutlined />}
+                onClick={nextPeriod}
+                className="rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
       </Card>
 
-      {/* Employees */}
+      {/* Legend */}
+
+      <Card className="rounded-2xl border-0 shadow-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <span className="text-sm font-semibold text-slate-700">Attendance</span>
+
+          {/* Present */}
+
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-green-100 px-1.5 text-xs font-bold text-green-700">
+              P
+            </span>
+
+            <span className="text-sm text-slate-500">Present</span>
+          </div>
+
+          {/* Half Day */}
+
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-orange-100 px-1.5 text-xs font-bold text-orange-700">
+              HD
+            </span>
+
+            <span className="text-sm text-slate-500">Half Day</span>
+          </div>
+
+          {/* Short Login */}
+
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-blue-100 px-1.5 text-xs font-bold text-blue-700">
+              SL
+            </span>
+
+            <span className="text-sm text-slate-500">Short Login</span>
+          </div>
+
+          {/* Absent */}
+
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-red-100 text-xs font-bold text-red-700">
+              A
+            </span>
+
+            <span className="text-sm text-slate-500">Absent</span>
+          </div>
+
+          {/* Leave */}
+
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-yellow-100 text-xs font-bold text-yellow-700">
+              L
+            </span>
+
+            <span className="text-sm text-slate-500">Leave</span>
+          </div>
+
+          {/* Week Off */}
+
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-slate-100 px-1.5 text-xs font-bold text-slate-500">
+              WO
+            </span>
+
+            <span className="text-sm text-slate-500">Week Off</span>
+          </div>
+
+          {/* Holiday */}
+
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-purple-100 text-xs font-bold text-purple-700">
+              H
+            </span>
+
+            <span className="text-sm text-slate-500">Holiday</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Roster */}
+
       <Card
-        title={<span className="text-lg font-semibold">Employees</span>}
-        className="overflow-hidden rounded-xl"
+        title={
+          <div>
+            <div className="text-lg font-semibold text-slate-900">Employee Roster</div>
+
+            <div className="mt-1 text-sm font-normal text-slate-400">{roster.length} employees</div>
+          </div>
+        }
+        className="overflow-hidden rounded-2xl border-0 shadow-sm"
+        styles={{
+          body: {
+            padding: 0,
+          },
+        }}
       >
-        <Table<User>
-          rowKey="_id"
+        <Table<RosterUser>
+          rowKey={(record) => record.employee._id}
           columns={columns}
-          dataSource={users}
+          dataSource={roster}
           loading={loading}
+          bordered
+          scroll={{
+            x: viewMode === 'Monthly' ? 'max-content' : viewMode === 'Weekly' ? 900 : 700,
+          }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
             pageSizeOptions: ['10', '25', '50', '100'],
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`,
           }}
-          onRow={(record) => ({
-            onClick: () => {
-              router.push(`/admin/attendance/daily/${record._id}`);
-            },
-            style: {
-              cursor: 'pointer',
-            },
-          })}
         />
       </Card>
     </div>
