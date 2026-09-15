@@ -7,7 +7,39 @@ import { connectDB } from '@/lib/mongodb';
 
 import Attendance from '@/models/attendance/Attendance';
 import AttendanceLog from '@/models/attendance/AttendanceLog';
+import Roster from '@/models/attendance/Roster';
 import User from '@/models/user/User';
+
+type AttendanceStatus = 'P' | 'WO' | 'L' | 'H' | 'HD' | 'A' | 'OD' | 'WFH' | 'SL';
+
+const PROTECTED_ROSTER_STATUSES: AttendanceStatus[] = ['WO', 'L', 'H', 'OD', 'WFH'];
+
+/*
+|--------------------------------------------------------------------------
+| Calculate Attendance Status
+|--------------------------------------------------------------------------
+|
+| < 5 hours       = SL
+| 5 to < 7 hours  = HD
+| 7+ hours        = P
+|
+*/
+
+function calculateAttendanceStatus(workingMinutes: number, hasCheckIn: boolean): AttendanceStatus {
+  if (!hasCheckIn) {
+    return 'A';
+  }
+
+  if (workingMinutes < 300) {
+    return 'SL';
+  }
+
+  if (workingMinutes < 420) {
+    return 'HD';
+  }
+
+  return 'P';
+}
 
 export async function POST() {
   try {
@@ -95,25 +127,41 @@ export async function POST() {
 
       const attendance = await Attendance.findOne({
         employee: user._id,
-
         date: {
           $gte: startOfDay,
           $lte: endOfDay,
         },
       });
 
-      if (attendance) {
-        /*
-        |--------------------------------------------------------------------------
-        | Find Active Session
-        |--------------------------------------------------------------------------
-        */
+      /*
+      |--------------------------------------------------------------------------
+      | Find Today's Roster
+      |--------------------------------------------------------------------------
+      */
 
+      const roster = await Roster.findOne({
+        employee: user._id,
+        date: {
+          $gte: startOfDay,
+          $lte: endOfDay,
+        },
+        rosterStatus: 'active',
+      });
+
+      /*
+      |--------------------------------------------------------------------------
+      | Find Active Session
+      |--------------------------------------------------------------------------
+      */
+
+      if (attendance) {
         let sessionName: 'am' | 'pm' | null = null;
 
         /*
-         * Check PM first.
-         */
+        |--------------------------------------------------------------------------
+        | Check PM First
+        |--------------------------------------------------------------------------
+        */
 
         if (
           attendance.pm &&
@@ -123,8 +171,10 @@ export async function POST() {
         } else if (
 
         /*
-         * Otherwise check AM.
-         */
+        |--------------------------------------------------------------------------
+        | Otherwise Check AM
+        |--------------------------------------------------------------------------
+        */
           attendance.am &&
           (attendance.am.currentStatus === 'Working' || attendance.am.currentStatus === 'On Break')
         ) {
@@ -142,6 +192,25 @@ export async function POST() {
 
           /*
           |--------------------------------------------------------------------------
+          | Effective Checkout Time
+          |--------------------------------------------------------------------------
+          |
+          | If autoLogoutAt exists and has already passed,
+          | don't count time beyond autoLogoutAt.
+          |
+          */
+
+          let effectiveCheckoutTime = now;
+
+          if (
+            session.autoLogoutAt &&
+            session.autoLogoutAt.getTime() < effectiveCheckoutTime.getTime()
+          ) {
+            effectiveCheckoutTime = session.autoLogoutAt;
+          }
+
+          /*
+          |--------------------------------------------------------------------------
           | Calculate Current Login Duration
           |--------------------------------------------------------------------------
           */
@@ -151,7 +220,7 @@ export async function POST() {
           if (session.checkIn) {
             currentSessionMinutes = Math.max(
               0,
-              Math.floor((now.getTime() - session.checkIn.getTime()) / 60000)
+              Math.floor((effectiveCheckoutTime.getTime() - session.checkIn.getTime()) / 60000)
             );
           }
 
@@ -159,10 +228,6 @@ export async function POST() {
           |--------------------------------------------------------------------------
           | Current Session Break
           |--------------------------------------------------------------------------
-          |
-          | session.breakMinutes already contains breaks from this
-          | current login session.
-          |
           */
 
           const currentBreakMinutes = Number(session.breakMinutes || 0);
@@ -177,13 +242,8 @@ export async function POST() {
 
           /*
           |--------------------------------------------------------------------------
-          | IMPORTANT
+          | Add Current Session To Existing Total
           |--------------------------------------------------------------------------
-          |
-          | ADD current login session to existing AM/PM total.
-          |
-          | Do NOT reset the previous total.
-          |
           */
 
           const previousWorkingMinutes = Number(session.workingMinutes || 0);
@@ -196,11 +256,11 @@ export async function POST() {
           |--------------------------------------------------------------------------
           */
 
-          session.checkOut = now;
+          session.checkOut = effectiveCheckoutTime;
 
           session.currentStatus = 'Checked Out';
 
-          session.lastActivityAt = now;
+          session.lastActivityAt = effectiveCheckoutTime;
 
           /*
           |--------------------------------------------------------------------------
@@ -220,7 +280,7 @@ export async function POST() {
 
           attendance.currentStatus = 'Checked Out';
 
-          attendance.lastActivityAt = now;
+          attendance.lastActivityAt = effectiveCheckoutTime;
 
           /*
           |--------------------------------------------------------------------------
@@ -252,7 +312,7 @@ export async function POST() {
 
           /*
           |--------------------------------------------------------------------------
-          | Save
+          | Save Attendance
           |--------------------------------------------------------------------------
           */
 
@@ -262,9 +322,6 @@ export async function POST() {
           |--------------------------------------------------------------------------
           | Create OUT Log
           |--------------------------------------------------------------------------
-          |
-          | Every logout gets a separate OUT log.
-          |
           */
 
           await AttendanceLog.create({
@@ -272,7 +329,7 @@ export async function POST() {
 
             attendance: attendance._id,
 
-            dateTime: now,
+            dateTime: effectiveCheckoutTime,
 
             type: 'OUT',
 
@@ -282,6 +339,58 @@ export async function POST() {
 
             createdBy: user._id,
           });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update Roster Status
+        |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        |
+        | Special admin statuses are protected:
+        |
+        | WO / L / H / OD / WFH
+        |
+        | Everything else is calculated from actual working time.
+        |
+        */
+
+        if (roster) {
+          const currentRosterStatus = roster.status as AttendanceStatus;
+
+          /*
+          |--------------------------------------------------------------------------
+          | Protected Status
+          |--------------------------------------------------------------------------
+          */
+
+          if (PROTECTED_ROSTER_STATUSES.includes(currentRosterStatus)) {
+            console.log(`Roster status ${currentRosterStatus} protected for employee ${user._id}`);
+          } else {
+
+          /*
+          |--------------------------------------------------------------------------
+          | Calculate Actual Attendance Status
+          |--------------------------------------------------------------------------
+          */
+            const totalWorkingMinutes = Number(attendance.workingMinutes || 0);
+
+            const hasCheckIn = Boolean(attendance.am?.checkIn) || Boolean(attendance.pm?.checkIn);
+
+            const calculatedStatus = calculateAttendanceStatus(totalWorkingMinutes, hasCheckIn);
+
+            roster.status = calculatedStatus;
+
+            roster.updatedBy = user._id;
+
+            await roster.save();
+
+            console.log(`Roster status updated: ${currentRosterStatus} -> ${calculatedStatus}`, {
+              employee: user._id.toString(),
+              workingMinutes: totalWorkingMinutes,
+            });
+          }
         }
       }
     }

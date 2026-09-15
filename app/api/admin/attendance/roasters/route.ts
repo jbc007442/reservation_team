@@ -3,19 +3,49 @@ import { connectDB } from '@/lib/mongodb';
 
 import Attendance from '@/models/attendance/Attendance';
 import AttendanceLog from '@/models/attendance/AttendanceLog';
+import Roster from '@/models/attendance/Roster';
 import User from '@/models/user/User';
 
+/*
+|--------------------------------------------------------------------------
+| Types
+|--------------------------------------------------------------------------
+*/
+
 type SessionName = 'am' | 'pm';
+
+type AttendanceStatus = 'P' | 'WO' | 'L' | 'H' | 'HD' | 'A' | 'OD' | 'WFH' | 'SL';
+
+type SessionCurrentStatus = 'Working' | 'On Break' | 'Checked Out';
 
 interface SessionCalculation {
   checkIn: Date | null;
   checkOut: Date | null;
   workingMinutes: number;
   breakMinutes: number;
-  currentStatus: 'Working' | 'On Break' | 'Checked Out';
+  currentStatus: SessionCurrentStatus;
   lastActivityAt: Date | null;
   autoLogoutAt: Date | null;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Status Rules
+|--------------------------------------------------------------------------
+|
+| These statuses are manually assigned by admin and must be protected.
+|
+| WO  = Weekly Off
+| L   = Leave
+| H   = Holiday
+| OD  = On Duty
+| WFH = Work From Home
+|
+| P / HD / SL are attendance-generated statuses.
+|--------------------------------------------------------------------------
+*/
+
+const PROTECTED_ROSTER_STATUSES: AttendanceStatus[] = ['WO', 'L', 'H', 'OD', 'WFH'];
 
 /*
 |--------------------------------------------------------------------------
@@ -31,7 +61,9 @@ function createLocalDate(dateString: string): Date {
 
 function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
+
   const month = String(date.getMonth() + 1).padStart(2, '0');
+
   const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
@@ -51,12 +83,12 @@ function addDays(date: Date, days: number): Date {
 |--------------------------------------------------------------------------
 */
 
-function toValidDate(value: any): Date | null {
+function toValidDate(value: unknown): Date | null {
   if (!value) {
     return null;
   }
 
-  const date = new Date(value);
+  const date = new Date(value as string | number | Date);
 
   if (Number.isNaN(date.getTime())) {
     return null;
@@ -79,19 +111,6 @@ function calculateMinutes(from: Date, to: Date): number {
 |--------------------------------------------------------------------------
 | Calculate AM / PM Session
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| calculationEnd is the maximum time that this session is allowed
-| to calculate up to.
-|
-| For today:
-|     calculationEnd = current time
-|
-| For previous dates:
-|     calculationEnd = 23:59:59 of that date
-|
-|--------------------------------------------------------------------------
 */
 
 function calculateSession(
@@ -102,7 +121,7 @@ function calculateSession(
 ): SessionCalculation {
   /*
   |--------------------------------------------------------------------------
-  | Filter Session Logs
+  | Filter logs for this session
   |--------------------------------------------------------------------------
   */
 
@@ -157,7 +176,7 @@ function calculateSession(
 
     /*
     |--------------------------------------------------------------------------
-    | Never process logs after calculationEnd
+    | Ignore logs after calculation end
     |--------------------------------------------------------------------------
     */
 
@@ -227,7 +246,7 @@ function calculateSession(
       if (activeLogin) {
         /*
         |--------------------------------------------------------------------------
-        | Close Active Break
+        | Close active break
         |--------------------------------------------------------------------------
         */
 
@@ -241,7 +260,7 @@ function calculateSession(
 
         /*
         |--------------------------------------------------------------------------
-        | Login Duration
+        | Login duration
         |--------------------------------------------------------------------------
         */
 
@@ -249,7 +268,7 @@ function calculateSession(
 
         /*
         |--------------------------------------------------------------------------
-        | Breaks Inside This Login
+        | Calculate breaks inside this login
         |--------------------------------------------------------------------------
         */
 
@@ -285,7 +304,7 @@ function calculateSession(
 
         /*
         |--------------------------------------------------------------------------
-        | Add Working Time
+        | Add working time
         |--------------------------------------------------------------------------
         */
 
@@ -302,12 +321,7 @@ function calculateSession(
 
   /*
   |--------------------------------------------------------------------------
-  | FALLBACK TO STORED SESSION
-  |--------------------------------------------------------------------------
-  |
-  | If the Attendance document has a checkIn but its AttendanceLog
-  | is missing, use the stored session.
-  |
+  | Fallback to stored session
   |--------------------------------------------------------------------------
   */
 
@@ -316,59 +330,44 @@ function calculateSession(
 
     const storedCheckOut = toValidDate(storedSession?.checkOut);
 
-    if (storedCheckIn) {
+    if (storedCheckIn && storedCheckIn <= calculationEnd) {
+      firstCheckIn = storedCheckIn;
+
       /*
       |--------------------------------------------------------------------------
-      | Do not use a check-in from the future
+      | Already checked out
       |--------------------------------------------------------------------------
       */
 
-      if (storedCheckIn <= calculationEnd) {
-        firstCheckIn = storedCheckIn;
+      if (storedCheckOut && storedCheckOut >= storedCheckIn && storedCheckOut <= calculationEnd) {
+        const loginMinutes = calculateMinutes(storedCheckIn, storedCheckOut);
 
+        const storedBreakMinutes = Number(storedSession?.breakMinutes || 0);
+
+        totalBreakMinutes = storedBreakMinutes;
+
+        totalWorkingMinutes = Math.max(0, loginMinutes - storedBreakMinutes);
+
+        lastCheckOut = storedCheckOut;
+
+        lastActivityAt = lastActivityAt || storedCheckOut;
+      } else if (!storedCheckOut) {
         /*
         |--------------------------------------------------------------------------
-        | Already Checked Out
+        | Still active
         |--------------------------------------------------------------------------
         */
 
-        if (storedCheckOut && storedCheckOut >= storedCheckIn && storedCheckOut <= calculationEnd) {
-          const loginMinutes = calculateMinutes(storedCheckIn, storedCheckOut);
+        activeLogin = storedCheckIn;
 
-          totalWorkingMinutes += loginMinutes;
-
-          lastCheckOut = storedCheckOut;
-
-          lastActivityAt = lastActivityAt || storedCheckOut;
-        } else if (!storedCheckOut) {
-
-        /*
-        |--------------------------------------------------------------------------
-        | Still Active
-        |--------------------------------------------------------------------------
-        */
-          activeLogin = storedCheckIn;
-
-          lastActivityAt = lastActivityAt || storedCheckIn;
-        }
+        lastActivityAt = lastActivityAt || storedCheckIn;
       }
     }
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Currently Working
-  |--------------------------------------------------------------------------
-  |
-  | IMPORTANT:
-  |
-  | We calculate only until calculationEnd.
-  |
-  | Therefore:
-  |
-  | 13 Sep → maximum 13 Sep 23:59:59
-  | 14 Sep → maximum current time
-  |
+  | Currently working
   |--------------------------------------------------------------------------
   */
 
@@ -379,7 +378,7 @@ function calculateSession(
 
     /*
     |--------------------------------------------------------------------------
-    | Completed Breaks
+    | Completed breaks
     |--------------------------------------------------------------------------
     */
 
@@ -407,7 +406,7 @@ function calculateSession(
 
     /*
     |--------------------------------------------------------------------------
-    | Active Break
+    | Active break
     |--------------------------------------------------------------------------
     */
 
@@ -417,7 +416,7 @@ function calculateSession(
 
     /*
     |--------------------------------------------------------------------------
-    | Current Working Minutes
+    | Current working minutes
     |--------------------------------------------------------------------------
     */
 
@@ -427,6 +426,14 @@ function calculateSession(
     );
 
     totalWorkingMinutes += currentWorkingMinutes;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Break minutes
+    |--------------------------------------------------------------------------
+    */
+
+    totalBreakMinutes += intervalBreakMinutes;
   }
 
   /*
@@ -435,7 +442,7 @@ function calculateSession(
   |--------------------------------------------------------------------------
   */
 
-  let currentStatus: SessionCalculation['currentStatus'] = 'Checked Out';
+  let currentStatus: SessionCurrentStatus = 'Checked Out';
 
   if (activeLogin) {
     currentStatus = activeBreak ? 'On Break' : 'Working';
@@ -476,9 +483,9 @@ function calculateSession(
 
     checkOut: lastCheckOut,
 
-    workingMinutes: totalWorkingMinutes,
+    workingMinutes: Math.max(0, Math.floor(totalWorkingMinutes)),
 
-    breakMinutes: totalBreakMinutes,
+    breakMinutes: Math.max(0, Math.floor(totalBreakMinutes)),
 
     currentStatus,
 
@@ -490,96 +497,57 @@ function calculateSession(
 
 /*
 |--------------------------------------------------------------------------
-| Calculate Attendance Status
+| Calculate Common Attendance Status
 |--------------------------------------------------------------------------
 |
-| Rules:
-|
 | < 5 hours
-|     => Short Login
+|   => SL
 |
 | 5 hours to < 7 hours
-|     => Half Day
+|   => HD
 |
 | >= 7 hours
-|     => Present
+|   => P
 |
+| No login
+|   => null
 |--------------------------------------------------------------------------
 */
 
 function calculateAttendanceStatus(
   workingMinutes: number,
-  hasCheckIn: boolean,
-  existingStatus?: string
-): string {
-  /*
-  |--------------------------------------------------------------------------
-  | Actual Login Exists
-  |--------------------------------------------------------------------------
-  |
-  | Working time is the source of truth.
-  |
-  |--------------------------------------------------------------------------
-  */
-
-  if (hasCheckIn) {
-    /*
-    |--------------------------------------------------------------------------
-    | Less Than 5 Hours
-    |--------------------------------------------------------------------------
-    */
-
-    if (workingMinutes < 300) {
-      return 'Short Login';
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | 5 Hours To Less Than 7 Hours
-    |--------------------------------------------------------------------------
-    */
-
-    if (workingMinutes < 420) {
-      return 'Half Day';
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | 7 Hours Or More
-    |--------------------------------------------------------------------------
-    */
-
-    return 'Present';
+  hasCheckIn: boolean
+): AttendanceStatus | null {
+  if (!hasCheckIn) {
+    return null;
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | No Check-In
-  |--------------------------------------------------------------------------
-  |
-  | Preserve only manual attendance statuses.
-  |
-  |--------------------------------------------------------------------------
-  */
-
-  const manualStatuses = ['Absent', 'Leave', 'Holiday', 'Weekly Off'];
-
-  if (existingStatus && manualStatuses.includes(existingStatus)) {
-    return existingStatus;
+  if (workingMinutes < 300) {
+    return 'SL';
   }
 
-  return 'Not Marked';
+  if (workingMinutes < 420) {
+    return 'HD';
+  }
+
+  return 'P';
 }
 
 /*
 |--------------------------------------------------------------------------
-| GET ROSTER
+| GET ROSTER ATTENDANCE
 |--------------------------------------------------------------------------
 */
 
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Query Parameters
+    |--------------------------------------------------------------------------
+    */
 
     const { searchParams } = new URL(req.url);
 
@@ -604,6 +572,32 @@ export async function GET(req: NextRequest) {
     const endDate = to ? createLocalDate(to) : new Date(startDate);
 
     endDate.setHours(23, 59, 59, 999);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Date Range
+    |--------------------------------------------------------------------------
+    */
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid date range.',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (startDate > endDate) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'from date cannot be greater than to date.',
+        },
+        { status: 400 }
+      );
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -642,7 +636,7 @@ export async function GET(req: NextRequest) {
 
     /*
     |--------------------------------------------------------------------------
-    | Fetch Users
+    | Fetch Employees
     |--------------------------------------------------------------------------
     */
 
@@ -655,7 +649,7 @@ export async function GET(req: NextRequest) {
 
     /*
     |--------------------------------------------------------------------------
-    | No Users
+    | No Employees
     |--------------------------------------------------------------------------
     */
 
@@ -722,6 +716,58 @@ export async function GET(req: NextRequest) {
             })
             .lean()
         : [];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Fetch Roster
+    |--------------------------------------------------------------------------
+    |
+    | New Roster model:
+    |
+    | status       = P / WO / L / H / HD / A / OD / WFH / SL
+    |
+    | rosterStatus = active / inactive
+    |--------------------------------------------------------------------------
+    */
+
+    const rosterRecords = await Roster.find({
+      employee: {
+        $in: employeeIds,
+      },
+
+      date: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+
+      rosterStatus: 'active',
+    })
+      .select('employee date status rosterStatus')
+      .lean();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Roster Map
+    |--------------------------------------------------------------------------
+    */
+
+    const rosterMap = new Map<string, any>();
+
+    for (const rosterItem of rosterRecords as any[]) {
+      if (!rosterItem.employee) {
+        continue;
+      }
+
+      const employeeId = rosterItem.employee.toString();
+
+      const rosterDate = new Date(rosterItem.date);
+
+      const dateKey = formatLocalDate(rosterDate);
+
+      const mapKey = `${employeeId}_${dateKey}`;
+
+      rosterMap.set(mapKey, rosterItem);
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -795,7 +841,7 @@ export async function GET(req: NextRequest) {
 
     /*
     |--------------------------------------------------------------------------
-    | Build Roster
+    | Build Employee Attendance
     |--------------------------------------------------------------------------
     */
 
@@ -805,17 +851,43 @@ export async function GET(req: NextRequest) {
       for (const dateKey of dates) {
         const mapKey = `${user._id.toString()}_${dateKey}`;
 
+        /*
+          |--------------------------------------------------------------------------
+          | Roster
+          |--------------------------------------------------------------------------
+          */
+
+        const rosterItem = rosterMap.get(mapKey);
+
+        const assignedStatus = (rosterItem?.status || null) as AttendanceStatus | null;
+
+        /*
+          |--------------------------------------------------------------------------
+          | Attendance
+          |--------------------------------------------------------------------------
+          */
+
         const attendanceItem = attendanceMap.get(mapKey);
 
         /*
-            |--------------------------------------------------------------------------
-            | NO ATTENDANCE
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | No Attendance
+          |--------------------------------------------------------------------------
+          |
+          | If employee has not logged in yet:
+          |
+          | Admin assigned P  -> P
+          | Admin assigned WO -> WO
+          | Admin assigned L  -> L
+          | etc.
+          |
+          | No roster -> A
+          |--------------------------------------------------------------------------
+          */
 
         if (!attendanceItem) {
           employeeAttendance[dateKey] = {
-            status: 'Not Marked',
+            status: assignedStatus || 'A',
 
             currentStatus: 'Checked Out',
 
@@ -832,20 +904,18 @@ export async function GET(req: NextRequest) {
         }
 
         /*
-            |--------------------------------------------------------------------------
-            | Attendance Logs
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Attendance Logs
+          |--------------------------------------------------------------------------
+          */
 
         const itemLogs = logsByAttendance.get(attendanceItem._id.toString()) || [];
 
         /*
-            |--------------------------------------------------------------------------
-            | IMPORTANT:
-            |
-            | Determine the END of THIS attendance day.
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Attendance Date
+          |--------------------------------------------------------------------------
+          */
 
         const attendanceDate = createLocalDate(dateKey);
 
@@ -854,62 +924,54 @@ export async function GET(req: NextRequest) {
         dayEnd.setHours(23, 59, 59, 999);
 
         /*
-            |--------------------------------------------------------------------------
-            | TODAY vs PREVIOUS DATE
-            |--------------------------------------------------------------------------
-            |
-            | Today:
-            |     calculate until current time.
-            |
-            | Previous day:
-            |     calculate only until that day's end.
-            |
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Today vs Previous Date
+          |--------------------------------------------------------------------------
+          */
 
         const isToday = formatLocalDate(now) === dateKey;
 
         const calculationEnd = isToday ? now : dayEnd;
 
         /*
-            |--------------------------------------------------------------------------
-            | AM
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Calculate AM
+          |--------------------------------------------------------------------------
+          */
 
         const am = calculateSession(itemLogs, 'am', attendanceItem.am, calculationEnd);
 
         /*
-            |--------------------------------------------------------------------------
-            | PM
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Calculate PM
+          |--------------------------------------------------------------------------
+          */
 
         const pm = calculateSession(itemLogs, 'pm', attendanceItem.pm, calculationEnd);
 
         /*
-            |--------------------------------------------------------------------------
-            | Working Minutes
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Total Working Minutes
+          |--------------------------------------------------------------------------
+          */
 
         const workingMinutes = am.workingMinutes + pm.workingMinutes;
 
         /*
-            |--------------------------------------------------------------------------
-            | Break Minutes
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Total Break Minutes
+          |--------------------------------------------------------------------------
+          */
 
         const breakMinutes = am.breakMinutes + pm.breakMinutes;
 
         /*
-            |--------------------------------------------------------------------------
-            | Current Status
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Current Login Status
+          |--------------------------------------------------------------------------
+          */
 
-        let currentStatus = 'Checked Out';
+        let currentStatus: 'Working' | 'On Break' | 'Checked Out' = 'Checked Out';
 
         if (am.currentStatus === 'On Break' || pm.currentStatus === 'On Break') {
           currentStatus = 'On Break';
@@ -918,35 +980,122 @@ export async function GET(req: NextRequest) {
         }
 
         /*
-            |--------------------------------------------------------------------------
-            | Check-In
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Has Check-In
+          |--------------------------------------------------------------------------
+          */
 
         const hasCheckIn = Boolean(am.checkIn || pm.checkIn);
 
         /*
-            |--------------------------------------------------------------------------
-            | Attendance Status
-            |--------------------------------------------------------------------------
-            */
+          |--------------------------------------------------------------------------
+          | Calculate Actual Attendance Status
+          |--------------------------------------------------------------------------
+          */
 
-        const status = calculateAttendanceStatus(workingMinutes, hasCheckIn, attendanceItem.status);
+        const calculatedStatus = calculateAttendanceStatus(workingMinutes, hasCheckIn);
 
         /*
+          |--------------------------------------------------------------------------
+          | FINAL COMMON STATUS
+          |--------------------------------------------------------------------------
+          |
+          | IMPORTANT:
+          |
+          | If employee has actually logged in, actual working time
+          | controls P / HD / SL.
+          |
+          | Example:
+          |
+          | Admin assigned P
+          | Employee worked 6 minutes
+          |
+          | assignedStatus    = P
+          | calculatedStatus  = SL
+          |
+          | FINAL STATUS      = SL
+          |
+          |--------------------------------------------------------------------------
+          |
+          | Protected admin statuses:
+          |
+          | WO / L / H / OD / WFH
+          |
+          | These remain unchanged even when attendance exists.
+          |--------------------------------------------------------------------------
+          */
+
+        let status: AttendanceStatus;
+
+        if (assignedStatus && PROTECTED_ROSTER_STATUSES.includes(assignedStatus)) {
+          /*
             |--------------------------------------------------------------------------
-            | Build Attendance Day
+            | Protected Admin Status
             |--------------------------------------------------------------------------
             */
 
+          status = assignedStatus;
+        } else if (calculatedStatus) {
+          /*
+            |--------------------------------------------------------------------------
+            | Actual Working Time Status
+            |--------------------------------------------------------------------------
+            |
+            | < 5h  = SL
+            | 5-7h  = HD
+            | 7h+   = P
+            |--------------------------------------------------------------------------
+            */
+
+          status = calculatedStatus;
+        } else {
+          /*
+            |--------------------------------------------------------------------------
+            | No valid attendance calculation
+            |--------------------------------------------------------------------------
+            */
+
+          status = assignedStatus || 'A';
+        }
+
+        /*
+          |--------------------------------------------------------------------------
+          | Build Attendance Day
+          |--------------------------------------------------------------------------
+          */
+
         employeeAttendance[dateKey] = {
+          /*
+            |--------------------------------------------------------------------------
+            | SINGLE COMMON STATUS
+            |--------------------------------------------------------------------------
+            */
+
           status,
 
+          /*
+            |--------------------------------------------------------------------------
+            | Current Login State
+            |--------------------------------------------------------------------------
+            */
+
           currentStatus,
+
+          /*
+            |--------------------------------------------------------------------------
+            | Working / Break Time
+            |--------------------------------------------------------------------------
+            */
 
           workingMinutes,
 
           breakMinutes,
+
+          /*
+            |--------------------------------------------------------------------------
+            | AM Session
+            |--------------------------------------------------------------------------
+            */
 
           am: {
             ...am,
@@ -959,6 +1108,12 @@ export async function GET(req: NextRequest) {
 
             autoLogoutAt: am.autoLogoutAt ? am.autoLogoutAt.toISOString() : null,
           },
+
+          /*
+            |--------------------------------------------------------------------------
+            | PM Session
+            |--------------------------------------------------------------------------
+            */
 
           pm: {
             ...pm,
@@ -975,10 +1130,10 @@ export async function GET(req: NextRequest) {
       }
 
       /*
-          |--------------------------------------------------------------------------
-          | Employee
-          |--------------------------------------------------------------------------
-          */
+        |--------------------------------------------------------------------------
+        | Employee
+        |--------------------------------------------------------------------------
+        */
 
       return {
         employee: {

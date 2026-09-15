@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/mongodb';
 import Roster from '@/models/attendance/Roster';
 import User from '@/models/user/User';
 
-const ALLOWED_ROSTER_STATUSES = ['P', 'WO', 'L', 'H', 'HD', 'A', 'OD', 'WFH'];
+const ALLOWED_STATUSES = ['P', 'WO', 'L', 'H', 'HD', 'A', 'OD', 'WFH', 'SL'];
 
 export async function GET(req: NextRequest) {
   try {
@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
         $gte: start,
         $lte: end,
       },
-      status: 'active',
+
+      // rosterStatus controls whether the roster record is active
+      rosterStatus: 'active',
     })
       .populate({
         path: 'employee',
@@ -49,8 +51,8 @@ export async function GET(req: NextRequest) {
       .lean();
 
     /*
-     * Because populate + match returns null for admin employees,
-     * remove those records from the response.
+     * populate + match returns null for admin employees.
+     * Remove those records from the response.
      */
     const filteredRoster = roster.filter((record) => record.employee !== null);
 
@@ -78,29 +80,42 @@ export async function PUT(req: NextRequest) {
 
     const body = await req.json();
 
-    const { employee, date, rosterStatus } = body;
+    const { employee, date, status, rosterStatus = 'active' } = body;
 
     /*
      * Required fields
      */
-    if (!employee || !date || !rosterStatus) {
+    if (!employee || !date || !status) {
       return NextResponse.json(
         {
           success: false,
-          message: 'employee, date and rosterStatus are required.',
+          message: 'employee, date and status are required.',
         },
         { status: 400 }
       );
     }
 
     /*
-     * Validate roster status
+     * Validate common attendance status
      */
-    if (!ALLOWED_ROSTER_STATUSES.includes(rosterStatus)) {
+    if (!ALLOWED_STATUSES.includes(status)) {
       return NextResponse.json(
         {
           success: false,
-          message: 'Invalid roster status.',
+          message: 'Invalid attendance status.',
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+     * Validate roster record status
+     */
+    if (!['active', 'inactive'].includes(rosterStatus)) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid roster record status.',
         },
         { status: 400 }
       );
@@ -146,8 +161,12 @@ export async function PUT(req: NextRequest) {
         $set: {
           employee,
           date: rosterDate,
+
+          // COMMON ATTENDANCE STATUS
+          status,
+
+          // ACTIVE / INACTIVE ROSTER RECORD
           rosterStatus,
-          status: 'active',
         },
       },
       {

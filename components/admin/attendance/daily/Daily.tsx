@@ -1,19 +1,7 @@
-"use client";
+'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  Avatar,
-  Card,
-  Col,
-  DatePicker,
-  Input,
-  Row,
-  Segmented,
-  Table,
-  Tag,
-  Button,
-  Tooltip,
-} from 'antd';
+import { Avatar, Card, Col, DatePicker, Input, Row, Segmented, Table, Button, Tooltip } from 'antd';
 
 import {
   SearchOutlined,
@@ -27,6 +15,12 @@ import * as XLSX from 'xlsx';
 
 import dayjs, { Dayjs } from 'dayjs';
 
+/*
+|--------------------------------------------------------------------------
+| User
+|--------------------------------------------------------------------------
+*/
+
 interface User {
   _id: string;
   employeeId?: string;
@@ -36,6 +30,12 @@ interface User {
   department?: string;
   designation?: string;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Attendance Session
+|--------------------------------------------------------------------------
+*/
 
 interface AttendanceSession {
   checkIn: string | null;
@@ -47,21 +47,87 @@ interface AttendanceSession {
   autoLogoutAt?: string | null;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Common Attendance Status
+|--------------------------------------------------------------------------
+|
+| status is the SINGLE common status.
+|
+| P   = Present
+| WO  = Weekly Off
+| L   = Leave
+| H   = Holiday
+| HD  = Half Day
+| OD  = On Duty
+| WFH = Work From Home
+| SL  = Short Login
+|
+| A / Absent is intentionally NOT displayed in UI.
+|
+|--------------------------------------------------------------------------
+*/
+
 interface AttendanceDay {
-  status: string;
+  /*
+  |--------------------------------------------------------------------------
+  | Single Common Status
+  |--------------------------------------------------------------------------
+  */
+
+  status?: string | null;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Current Login Status
+  |--------------------------------------------------------------------------
+  */
+
   currentStatus: string;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Time
+  |--------------------------------------------------------------------------
+  */
+
   workingMinutes: number;
   breakMinutes: number;
+
+  /*
+  |--------------------------------------------------------------------------
+  | Sessions
+  |--------------------------------------------------------------------------
+  */
+
   am: AttendanceSession | null;
   pm: AttendanceSession | null;
 }
+
+/*
+|--------------------------------------------------------------------------
+| Roster User
+|--------------------------------------------------------------------------
+*/
 
 interface RosterUser {
   employee: User;
   attendance: Record<string, AttendanceDay>;
 }
 
+/*
+|--------------------------------------------------------------------------
+| View Mode
+|--------------------------------------------------------------------------
+*/
+
 type ViewMode = 'Daily' | 'Weekly' | 'Monthly';
+
+/*
+|--------------------------------------------------------------------------
+| Component
+|--------------------------------------------------------------------------
+*/
 
 export default function Daily() {
   const [roster, setRoster] = useState<RosterUser[]>([]);
@@ -148,6 +214,23 @@ export default function Daily() {
 
   useEffect(() => {
     fetchRoster();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Every Minute
+    |--------------------------------------------------------------------------
+    |
+    | This allows live status to update:
+    |
+    | SL -> HD -> P
+    |
+    */
+
+    const interval = setInterval(() => {
+      fetchRoster();
+    }, 60 * 1000);
+
+    return () => clearInterval(interval);
   }, [search, viewMode, selectedDate]);
 
   /*
@@ -201,7 +284,6 @@ export default function Daily() {
 
     if (viewMode === 'Weekly') {
       const start = selectedDate.startOf('week').add(1, 'day');
-
       const end = start.add(6, 'day');
 
       return `${start.format('DD MMM')} - ${end.format('DD MMM YYYY')}`;
@@ -263,12 +345,25 @@ export default function Daily() {
 
   /*
   |--------------------------------------------------------------------------
-  | Status Configuration
+  | Common Status Configuration
   |--------------------------------------------------------------------------
+  |
+  | A / Absent intentionally removed.
+  |
   */
 
-  const getStatusConfig = (status: string) => {
+  const getStatusConfig = (status?: string | null) => {
+    if (!status) {
+      return null;
+    }
+
     switch (status) {
+      /*
+      |--------------------------------------------------------------------------
+      | Present
+      |--------------------------------------------------------------------------
+      */
+
       case 'Present':
       case 'P':
         return {
@@ -276,6 +371,12 @@ export default function Daily() {
           description: 'Present',
           className: 'bg-green-100 text-green-700 border-green-200',
         };
+
+      /*
+      |--------------------------------------------------------------------------
+      | Half Day
+      |--------------------------------------------------------------------------
+      */
 
       case 'Half Day':
       case 'HD':
@@ -285,6 +386,12 @@ export default function Daily() {
           className: 'bg-orange-100 text-orange-700 border-orange-200',
         };
 
+      /*
+      |--------------------------------------------------------------------------
+      | Short Login
+      |--------------------------------------------------------------------------
+      */
+
       case 'Short Login':
       case 'SL':
         return {
@@ -293,13 +400,11 @@ export default function Daily() {
           className: 'bg-blue-100 text-blue-700 border-blue-200',
         };
 
-      case 'Absent':
-      case 'A':
-        return {
-          label: 'A',
-          description: 'Absent',
-          className: 'bg-red-100 text-red-700 border-red-200',
-        };
+      /*
+      |--------------------------------------------------------------------------
+      | Leave
+      |--------------------------------------------------------------------------
+      */
 
       case 'Leave':
       case 'L':
@@ -309,6 +414,13 @@ export default function Daily() {
           className: 'bg-yellow-100 text-yellow-700 border-yellow-200',
         };
 
+      /*
+      |--------------------------------------------------------------------------
+      | Weekly Off
+      |--------------------------------------------------------------------------
+      */
+
+      case 'Weekly Off':
       case 'Week Off':
       case 'WO':
         return {
@@ -316,6 +428,12 @@ export default function Daily() {
           description: 'Week Off',
           className: 'bg-slate-100 text-slate-500 border-slate-200',
         };
+
+      /*
+      |--------------------------------------------------------------------------
+      | Holiday
+      |--------------------------------------------------------------------------
+      */
 
       case 'Holiday':
       case 'H':
@@ -325,13 +443,45 @@ export default function Daily() {
           className: 'bg-purple-100 text-purple-700 border-purple-200',
         };
 
-      case 'Not Marked':
-      default:
+      /*
+      |--------------------------------------------------------------------------
+      | On Duty
+      |--------------------------------------------------------------------------
+      */
+
+      case 'On Duty':
+      case 'OD':
         return {
-          label: '-',
-          description: 'Not Marked',
-          className: 'bg-slate-100 text-slate-400 border-slate-200',
+          label: 'OD',
+          description: 'On Duty',
+          className: 'bg-cyan-100 text-cyan-700 border-cyan-200',
         };
+
+      /*
+      |--------------------------------------------------------------------------
+      | Work From Home
+      |--------------------------------------------------------------------------
+      */
+
+      case 'Work From Home':
+      case 'WFH':
+        return {
+          label: 'WFH',
+          description: 'Work From Home',
+          className: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+        };
+
+      /*
+      |--------------------------------------------------------------------------
+      | Unknown / Absent
+      |--------------------------------------------------------------------------
+      |
+      | Do not display unknown values such as A.
+      |
+      */
+
+      default:
+        return null;
     }
   };
 
@@ -339,30 +489,104 @@ export default function Daily() {
   |--------------------------------------------------------------------------
   | Status UI
   |--------------------------------------------------------------------------
+  |
+  | Only ONE common status is displayed.
+  |
   */
 
   const renderStatus = (date: Dayjs, record: RosterUser) => {
     const attendance = getAttendance(record, date);
 
+    /*
+    |--------------------------------------------------------------------------
+    | No Attendance Record
+    |--------------------------------------------------------------------------
+    */
+
     if (!attendance) {
       return (
         <div className="flex justify-center">
-          <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-slate-100 px-2 text-xs font-semibold text-slate-400">
+          <span
+            className="
+              flex h-8 min-w-8
+              items-center justify-center
+              rounded-lg
+              bg-slate-100
+              px-2
+              text-xs
+              font-semibold
+              text-slate-400
+            "
+          >
             -
           </span>
         </div>
       );
     }
 
-    const config = getStatusConfig(attendance.status);
+    /*
+    |--------------------------------------------------------------------------
+    | Common Status
+    |--------------------------------------------------------------------------
+    */
+
+    const statusConfig = getStatusConfig(attendance.status);
+
+    /*
+    |--------------------------------------------------------------------------
+    | No Displayable Status
+    |--------------------------------------------------------------------------
+    |
+    | This includes A / Absent.
+    |
+    */
+
+    if (!statusConfig) {
+      return (
+        <div className="flex justify-center">
+          <span
+            className="
+              flex h-8 min-w-8
+              items-center justify-center
+              rounded-lg
+              bg-slate-100
+              px-2
+              text-xs
+              font-semibold
+              text-slate-400
+            "
+          >
+            -
+          </span>
+        </div>
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Single Status Badge
+    |--------------------------------------------------------------------------
+    */
 
     return (
       <div className="flex justify-center">
-        <Tooltip title={`${config.description} • ${formatWorkingTime(attendance.workingMinutes)}`}>
+        <Tooltip
+          title={`${statusConfig.description} • ${formatWorkingTime(attendance.workingMinutes)}`}
+        >
           <span
-            className={`flex h-8 min-w-8 cursor-default items-center justify-center rounded-lg border px-1.5 text-xs font-bold ${config.className}`}
+            className={`
+              flex h-8 min-w-8
+              cursor-default
+              items-center justify-center
+              rounded-lg
+              border
+              px-1.5
+              text-xs
+              font-bold
+              ${statusConfig.className}
+            `}
           >
-            {config.label}
+            {statusConfig.label}
           </span>
         </Tooltip>
       </div>
@@ -425,6 +649,7 @@ export default function Daily() {
       key: selectedDate.format('YYYY-MM-DD'),
 
       align: 'center' as const,
+
       width: 160,
 
       render: (_: unknown, record: RosterUser) => renderStatus(selectedDate, record),
@@ -432,38 +657,57 @@ export default function Daily() {
 
     {
       title: 'Details',
+
       key: 'details',
+
       align: 'center' as const,
-      width: 200,
+
+      width: 250,
 
       render: (_: unknown, record: RosterUser) => {
         const attendance = getAttendance(record, selectedDate);
 
         if (!attendance) {
-          return <Tag className="rounded-full">Not Marked</Tag>;
+          return <span className="text-xs text-slate-400">Not Marked</span>;
         }
 
-        const config = getStatusConfig(attendance.status);
+        const statusConfig = getStatusConfig(attendance.status);
 
         return (
           <div className="text-xs text-slate-500">
-            <div className="flex items-center justify-center gap-2">
-              <span className="font-medium text-slate-700">{config.description}</span>
-
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${config.className}`}
-              >
-                {config.label}
-              </span>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {statusConfig ? (
+                <span
+                  className={`
+                    rounded-full
+                    border
+                    px-2
+                    py-0.5
+                    text-[10px]
+                    font-bold
+                    ${statusConfig.className}
+                  `}
+                >
+                  {statusConfig.label}
+                  {' · '}
+                  {statusConfig.description}
+                </span>
+              ) : (
+                <span>Not Marked</span>
+              )}
             </div>
 
-            <div className="mt-1">{formatWorkingTime(attendance.workingMinutes)}</div>
+            <div className="mt-1">Working: {formatWorkingTime(attendance.workingMinutes)}</div>
 
             {attendance.breakMinutes > 0 && (
               <div className="mt-0.5 text-[11px] text-slate-400">
                 Break: {formatWorkingTime(attendance.breakMinutes)}
               </div>
             )}
+
+            <div className="mt-0.5 text-[11px] text-slate-400">
+              Status: {attendance.currentStatus || 'Checked Out'}
+            </div>
           </div>
         );
       },
@@ -485,9 +729,12 @@ export default function Daily() {
           <div className="text-xs font-medium text-slate-400">{date.format('ddd')}</div>
 
           <div
-            className={`mt-1 text-sm font-semibold ${
-              date.isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-slate-700'
-            }`}
+            className={`
+              mt-1
+              text-sm
+              font-semibold
+              ${date.isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-slate-700'}
+            `}
           >
             {date.format('DD')}
           </div>
@@ -496,7 +743,7 @@ export default function Daily() {
 
       key: date.format('YYYY-MM-DD'),
 
-      width: 90,
+      width: 100,
 
       align: 'center' as const,
 
@@ -519,9 +766,12 @@ export default function Daily() {
           <div className="text-[10px] font-medium text-slate-400">{date.format('ddd')}</div>
 
           <div
-            className={`mt-1 text-xs font-semibold ${
-              date.isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-slate-700'
-            }`}
+            className={`
+              mt-1
+              text-xs
+              font-semibold
+              ${date.isSame(dayjs(), 'day') ? 'text-blue-600' : 'text-slate-700'}
+            `}
           >
             {date.format('DD')}
           </div>
@@ -530,7 +780,7 @@ export default function Daily() {
 
       key: date.format('YYYY-MM-DD'),
 
-      width: 58,
+      width: 72,
 
       align: 'center' as const,
 
@@ -553,18 +803,18 @@ export default function Daily() {
 
   /*
   |--------------------------------------------------------------------------
-  | UI
+  | Export Excel
   |--------------------------------------------------------------------------
   */
 
-  /*
-|--------------------------------------------------------------------------
-| Export Excel
-|--------------------------------------------------------------------------
-*/
-
   const exportToExcel = () => {
     const rows: Record<string, string | number>[] = [];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Daily Export
+    |--------------------------------------------------------------------------
+    */
 
     if (viewMode === 'Daily') {
       const dateKey = selectedDate.format('YYYY-MM-DD');
@@ -572,19 +822,31 @@ export default function Daily() {
       roster.forEach((record) => {
         const attendance = record.attendance?.[dateKey];
 
+        const statusConfig = getStatusConfig(attendance?.status);
+
         rows.push({
           Employee: record.employee.name,
+
           'Employee ID': record.employee.employeeId || '',
-          Department: record.employee.department || '',
-          Designation: record.employee.designation || '',
+
           Date: selectedDate.format('DD MMM YYYY'),
-          Status: attendance?.status || 'Not Marked',
+
+          Status: statusConfig?.label || 'Not Marked',
+
           'Working Time': attendance ? formatWorkingTime(attendance.workingMinutes) : '0h 0m',
+
           'Break Time': attendance ? formatWorkingTime(attendance.breakMinutes) : '0h 0m',
+
           'Current Status': attendance?.currentStatus || 'Checked Out',
         });
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Weekly Export
+    |--------------------------------------------------------------------------
+    */
 
     if (viewMode === 'Weekly') {
       const weekDates = getWeekDates();
@@ -592,21 +854,29 @@ export default function Daily() {
       roster.forEach((record) => {
         const row: Record<string, string | number> = {
           Employee: record.employee.name,
+
           'Employee ID': record.employee.employeeId || '',
-          Department: record.employee.department || '',
-          Designation: record.employee.designation || '',
         };
 
         weekDates.forEach((date) => {
           const dateKey = date.format('YYYY-MM-DD');
+
           const attendance = record.attendance?.[dateKey];
 
-          row[date.format('DD MMM')] = attendance?.status || 'Not Marked';
+          const statusConfig = getStatusConfig(attendance?.status);
+
+          row[date.format('DD MMM')] = statusConfig?.label || 'Not Marked';
         });
 
         rows.push(row);
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Monthly Export
+    |--------------------------------------------------------------------------
+    */
 
     if (viewMode === 'Monthly') {
       const monthDates = getMonthDates();
@@ -614,21 +884,39 @@ export default function Daily() {
       roster.forEach((record) => {
         const row: Record<string, string | number> = {
           Employee: record.employee.name,
+
           'Employee ID': record.employee.employeeId || '',
-          Department: record.employee.department || '',
-          Designation: record.employee.designation || '',
         };
 
         monthDates.forEach((date) => {
           const dateKey = date.format('YYYY-MM-DD');
+
           const attendance = record.attendance?.[dateKey];
 
-          row[date.format('DD MMM')] = attendance?.status || 'Not Marked';
+          const statusConfig = getStatusConfig(attendance?.status);
+
+          row[date.format('DD MMM')] = statusConfig?.label || 'Not Marked';
         });
 
         rows.push(row);
       });
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | No Data
+    |--------------------------------------------------------------------------
+    */
+
+    if (!rows.length) {
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Create Worksheet
+    |--------------------------------------------------------------------------
+    */
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
 
@@ -637,26 +925,38 @@ export default function Daily() {
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance Roster');
 
     /*
-  |--------------------------------------------------------------------------
-  | Column Widths
-  |--------------------------------------------------------------------------
-  */
+    |--------------------------------------------------------------------------
+    | Column Widths
+    |--------------------------------------------------------------------------
+    */
 
-    worksheet['!cols'] = [
-      { wch: 24 },
-      { wch: 22 },
-      { wch: 20 },
-      { wch: 22 },
-      ...Object.keys(rows[0] || {})
-        .slice(4)
-        .map(() => ({ wch: 16 })),
-    ];
+    worksheet['!cols'] =
+      viewMode === 'Daily'
+        ? [
+            { wch: 24 },
+            { wch: 18 },
+            { wch: 18 },
+            { wch: 20 },
+            { wch: 18 },
+            { wch: 20 },
+            { wch: 20 },
+          ]
+        : [
+            { wch: 24 },
+            { wch: 18 },
+
+            ...Object.keys(rows[0])
+              .slice(2)
+              .map(() => ({
+                wch: 18,
+              })),
+          ];
 
     /*
-  |--------------------------------------------------------------------------
-  | File Name
-  |--------------------------------------------------------------------------
-  */
+    |--------------------------------------------------------------------------
+    | File Name
+    |--------------------------------------------------------------------------
+    */
 
     const fileName =
       viewMode === 'Daily'
@@ -667,6 +967,12 @@ export default function Daily() {
 
     XLSX.writeFile(workbook, fileName);
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | UI
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div className="flex flex-col gap-6">
@@ -750,7 +1056,7 @@ export default function Daily() {
               </Button>
             </Col>
 
-            {/* Export Excel */}
+            {/* Export */}
 
             <Col xs={24} md={24} lg={4}>
               <Button
@@ -796,82 +1102,98 @@ export default function Daily() {
       {/* Legend */}
 
       <Card className="rounded-2xl border-0 shadow-sm">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <span className="text-sm font-semibold text-slate-700">Attendance</span>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <span className="text-sm font-semibold text-slate-700">Attendance Status</span>
 
-          {/* Present */}
+            {/* P */}
 
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-green-100 px-1.5 text-xs font-bold text-green-700">
-              P
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-green-200 bg-green-100 px-1.5 text-xs font-bold text-green-700">
+                P
+              </span>
 
-            <span className="text-sm text-slate-500">Present</span>
+              <span className="text-sm text-slate-500">Present</span>
+            </div>
+
+            {/* WO */}
+
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-slate-200 bg-slate-100 px-1.5 text-xs font-bold text-slate-500">
+                WO
+              </span>
+
+              <span className="text-sm text-slate-500">Week Off</span>
+            </div>
+
+            {/* L */}
+
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-yellow-200 bg-yellow-100 px-1.5 text-xs font-bold text-yellow-700">
+                L
+              </span>
+
+              <span className="text-sm text-slate-500">Leave</span>
+            </div>
+
+            {/* H */}
+
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-purple-200 bg-purple-100 px-1.5 text-xs font-bold text-purple-700">
+                H
+              </span>
+
+              <span className="text-sm text-slate-500">Holiday</span>
+            </div>
+
+            {/* HD */}
+
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-orange-200 bg-orange-100 px-1.5 text-xs font-bold text-orange-700">
+                HD
+              </span>
+
+              <span className="text-sm text-slate-500">Half Day</span>
+            </div>
+
+            {/* OD */}
+
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-cyan-200 bg-cyan-100 px-1.5 text-xs font-bold text-cyan-700">
+                OD
+              </span>
+
+              <span className="text-sm text-slate-500">On Duty</span>
+            </div>
+
+            {/* WFH */}
+
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-indigo-200 bg-indigo-100 px-1.5 text-xs font-bold text-indigo-700">
+                WFH
+              </span>
+
+              <span className="text-sm text-slate-500">Work From Home</span>
+            </div>
+
+            {/* SL */}
+
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 min-w-7 items-center justify-center rounded-md border border-blue-200 bg-blue-100 px-1.5 text-xs font-bold text-blue-700">
+                SL
+              </span>
+
+              <span className="text-sm text-slate-500">Short Login</span>
+            </div>
           </div>
 
-          {/* Half Day */}
-
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-orange-100 px-1.5 text-xs font-bold text-orange-700">
-              HD
-            </span>
-
-            <span className="text-sm text-slate-500">Half Day</span>
-          </div>
-
-          {/* Short Login */}
-
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-blue-100 px-1.5 text-xs font-bold text-blue-700">
-              SL
-            </span>
-
-            <span className="text-sm text-slate-500">Short Login</span>
-          </div>
-
-          {/* Absent */}
-
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-red-100 text-xs font-bold text-red-700">
-              A
-            </span>
-
-            <span className="text-sm text-slate-500">Absent</span>
-          </div>
-
-          {/* Leave */}
-
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-yellow-100 text-xs font-bold text-yellow-700">
-              L
-            </span>
-
-            <span className="text-sm text-slate-500">Leave</span>
-          </div>
-
-          {/* Week Off */}
-
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 min-w-7 items-center justify-center rounded-md bg-slate-100 px-1.5 text-xs font-bold text-slate-500">
-              WO
-            </span>
-
-            <span className="text-sm text-slate-500">Week Off</span>
-          </div>
-
-          {/* Holiday */}
-
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-purple-100 text-xs font-bold text-purple-700">
-              H
-            </span>
-
-            <span className="text-sm text-slate-500">Holiday</span>
+          <div className="border-t border-slate-100 pt-3 text-xs text-slate-400">
+            SL is automatically generated from actual login/working time.
           </div>
         </div>
       </Card>
 
-      {/* Roster */}
+      {/* Employee Roster */}
 
       <Card
         title={

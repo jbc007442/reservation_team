@@ -22,6 +22,18 @@ interface Props {
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
+/*
+|--------------------------------------------------------------------------
+| Admin Selectable Roster Statuses
+|--------------------------------------------------------------------------
+|
+| SL (Short Login) is intentionally NOT included here.
+|
+| SL is generated automatically by login/logout attendance logic
+| based on actual working minutes.
+|
+*/
+
 type RosterStatus = 'P' | 'WO' | 'L' | 'H' | 'HD' | 'A' | 'OD' | 'WFH';
 
 interface Roster {
@@ -59,10 +71,27 @@ interface UserApiEmployee {
 
 interface RosterRecord {
   _id: string;
-  employee: string | { _id: string };
+
+  employee:
+    | string
+    | {
+        _id: string;
+      };
+
   date: string;
-  rosterStatus: RosterStatus;
-  status: 'active' | 'inactive';
+
+  /*
+   * COMMON ATTENDANCE STATUS
+   *
+   * SL can come from login/logout logic,
+   * but admin cannot manually select it.
+   */
+  status: 'P' | 'WO' | 'L' | 'H' | 'HD' | 'A' | 'OD' | 'WFH' | 'SL';
+
+  /*
+   * Database roster record state.
+   */
+  rosterStatus: 'active' | 'inactive';
 }
 
 const emptyRoster: Roster = {
@@ -77,20 +106,43 @@ const emptyRoster: Roster = {
 
 const dayKeys: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
+/*
+|--------------------------------------------------------------------------
+| Admin Selectable Statuses
+|--------------------------------------------------------------------------
+|
+| Do NOT add SL here.
+|
+*/
+
 const allowedStatuses: RosterStatus[] = ['P', 'WO', 'L', 'H', 'HD', 'A', 'OD', 'WFH'];
 
 export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
 
+  /*
+  |--------------------------------------------------------------------------
+  | Start Of Week
+  |--------------------------------------------------------------------------
+  */
+
   const startOfWeek = currentWeek.startOf('week');
+
+  /*
+  |--------------------------------------------------------------------------
+  | Week Days
+  |--------------------------------------------------------------------------
+  */
 
   const weekDays = Array.from({ length: 7 }, (_, index) => startOfWeek.add(index, 'day'));
 
   /*
-   * Fetch employees + roster
-   * whenever week changes.
-   */
+  |--------------------------------------------------------------------------
+  | Fetch Employees + Roster
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
     fetchRosterData();
   }, [currentWeek]);
@@ -100,6 +152,7 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
       setLoading(true);
 
       const startDate = startOfWeek.format('YYYY-MM-DD');
+
       const endDate = startOfWeek.add(6, 'day').format('YYYY-MM-DD');
 
       const [usersResponse, rosterResponse] = await Promise.all([
@@ -111,48 +164,73 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
       const rosterResult = await rosterResponse.json();
 
       /*
-       * Users API validation
-       */
+      |--------------------------------------------------------------------------
+      | Users API Validation
+      |--------------------------------------------------------------------------
+      */
+
       if (!usersResponse.ok || !usersResult.success) {
         throw new Error(usersResult.message || 'Failed to fetch employees');
       }
 
       /*
-       * Roster API validation
-       */
+      |--------------------------------------------------------------------------
+      | Roster API Validation
+      |--------------------------------------------------------------------------
+      */
+
       if (!rosterResponse.ok || !rosterResult.success) {
         throw new Error(rosterResult.message || 'Failed to fetch roster');
       }
 
-      const rosterRecords: RosterRecord[] = rosterResult.data || [];
+      const rosterRecords: RosterRecord[] = Array.isArray(rosterResult.data)
+        ? rosterResult.data
+        : [];
 
       /*
-       * Build roster lookup.
-       *
-       * employeeId
-       *     ↓
-       * date
-       *     ↓
-       * rosterStatus
-       */
-      const rosterMap = new Map<string, Map<string, RosterStatus>>();
+      |--------------------------------------------------------------------------
+      | Build Roster Lookup
+      |--------------------------------------------------------------------------
+      |
+      | employeeId
+      |     ↓
+      | date
+      |     ↓
+      | common status
+      |
+      | Example:
+      |
+      | employeeId
+      |   └── 2026-09-15 → P
+      |   └── 2026-09-16 → WO
+      |   └── 2026-09-17 → HD
+      |   └── 2026-09-18 → SL
+      |
+      */
+
+      const rosterMap = new Map<string, Map<string, RosterRecord['status']>>();
 
       rosterRecords.forEach((record) => {
         const employeeId =
-          typeof record.employee === 'string' ? record.employee : record.employee._id;
+          typeof record.employee === 'string' ? record.employee : record.employee?._id;
 
-        if (!rosterMap.has(employeeId)) {
-          rosterMap.set(employeeId, new Map<string, RosterStatus>());
+        if (!employeeId) {
+          return;
         }
 
-        rosterMap
-          .get(employeeId)!
-          .set(dayjs(record.date).format('YYYY-MM-DD'), record.rosterStatus);
+        if (!rosterMap.has(employeeId)) {
+          rosterMap.set(employeeId, new Map<string, RosterRecord['status']>());
+        }
+
+        rosterMap.get(employeeId)!.set(dayjs(record.date).format('YYYY-MM-DD'), record.status);
       });
 
       /*
-       * Merge employees with weekly roster.
-       */
+      |--------------------------------------------------------------------------
+      | Merge Employees With Weekly Roster
+      |--------------------------------------------------------------------------
+      */
+
       const formattedEmployees: Employee[] = usersResult.data.map((employee: UserApiEmployee) => {
         const employeeRoster = rosterMap.get(employee._id);
 
@@ -185,8 +263,11 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
   };
 
   /*
-   * Save roster cell
-   */
+  |--------------------------------------------------------------------------
+  | Save Roster Cell
+  |--------------------------------------------------------------------------
+  */
+
   const updateRoster = async (employeeId: string, day: DayKey, value: string) => {
     const dayIndex = dayKeys.indexOf(day);
 
@@ -195,8 +276,15 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
     }
 
     /*
-     * Validate roster status
-     */
+    |--------------------------------------------------------------------------
+    | Validate Admin Status
+    |--------------------------------------------------------------------------
+    |
+    | SL is NOT accepted here.
+    | It is generated by attendance login/logout logic.
+    |
+    */
+
     if (!allowedStatuses.includes(value as RosterStatus)) {
       message.error('Invalid roster status.');
 
@@ -216,7 +304,29 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
         body: JSON.stringify({
           employee: employeeId,
           date: selectedDate,
-          rosterStatus: value as RosterStatus,
+
+          /*
+            |--------------------------------------------------------------------------
+            | IMPORTANT
+            |--------------------------------------------------------------------------
+            |
+            | `status` is now the COMMON attendance status.
+            |
+            | Do NOT send:
+            |
+            | rosterStatus: value
+            |
+            */
+
+          status: value as RosterStatus,
+
+          /*
+            |--------------------------------------------------------------------------
+            | Roster Record Status
+            |--------------------------------------------------------------------------
+            */
+
+          rosterStatus: 'active',
         }),
       });
 
@@ -227,8 +337,11 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
       }
 
       /*
-       * Update UI after successful save.
-       */
+      |--------------------------------------------------------------------------
+      | Update UI After Successful Save
+      |--------------------------------------------------------------------------
+      */
+
       setEmployees((prev) =>
         prev.map((employee) =>
           employee._id === employeeId
@@ -245,23 +358,20 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
         )
       );
 
-      /*
-       * Success toast
-       */
       message.success('Roster updated successfully.');
     } catch (error) {
       console.error('Failed to save roster:', error);
 
-      /*
-       * Error toast
-       */
       message.error(error instanceof Error ? error.message : 'Failed to save roster.');
     }
   };
 
   /*
-   * Local employee search
-   */
+  |--------------------------------------------------------------------------
+  | Local Employee Search
+  |--------------------------------------------------------------------------
+  */
+
   const filteredEmployees = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
 
@@ -291,8 +401,11 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
   }, [employees, searchTerm]);
 
   /*
-   * Loading
-   */
+  |--------------------------------------------------------------------------
+  | Loading
+  |--------------------------------------------------------------------------
+  */
+
   if (loading) {
     return (
       <div className="flex h-40 items-center justify-center">
@@ -300,6 +413,12 @@ export default function WeeklyRosterGrid({ currentWeek, searchTerm }: Props) {
       </div>
     );
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Render
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div className="overflow-x-auto rounded-lg shadow-sm">

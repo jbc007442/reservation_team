@@ -30,14 +30,18 @@ const { Title, Text } = Typography;
 |--------------------------------------------------------------------------
 */
 
-type RosterStatus = 'P' | 'WO' | 'L' | 'H' | 'HD' | 'A' | 'OD' | 'WFH';
+type RosterStatus = 'P' | 'WO' | 'L' | 'H' | 'HD' | 'A' | 'OD' | 'WFH' | 'SL';
 
 interface RosterRecord {
   _id: string;
   employee: string;
   date: string;
-  rosterStatus: RosterStatus;
-  status: 'active' | 'inactive';
+
+  // Common attendance / roster status
+  status: RosterStatus;
+
+  // Record status only
+  rosterStatus: 'active' | 'inactive';
 }
 
 interface Employee {
@@ -99,6 +103,11 @@ const STATUS_CONFIG: Record<
     label: 'Work From Home',
     color: 'geekblue',
   },
+
+  SL: {
+    label: 'Short Login',
+    color: 'gold',
+  },
 };
 
 /*
@@ -111,10 +120,11 @@ export default function Roster() {
   const [messageApi, contextHolder] = message.useMessage();
 
   /*
-   * Current week.
-   *
-   * Starts from today's date.
-   */
+  |--------------------------------------------------------------------------
+  | Current Week
+  |--------------------------------------------------------------------------
+  */
+
   const [currentWeek, setCurrentWeek] = useState<Dayjs>(() => dayjs());
 
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -125,7 +135,7 @@ export default function Roster() {
 
   /*
   |--------------------------------------------------------------------------
-  | Week calculation
+  | Week Calculation
   |--------------------------------------------------------------------------
   */
 
@@ -143,7 +153,7 @@ export default function Roster() {
 
   /*
   |--------------------------------------------------------------------------
-  | Current date
+  | Current Date
   |--------------------------------------------------------------------------
   */
 
@@ -151,7 +161,7 @@ export default function Roster() {
 
   /*
   |--------------------------------------------------------------------------
-  | Automatically detect new week
+  | Automatically Detect New Week
   |--------------------------------------------------------------------------
   */
 
@@ -183,7 +193,7 @@ export default function Roster() {
 
   /*
   |--------------------------------------------------------------------------
-  | Fetch user's roster
+  | Fetch User Roster
   |--------------------------------------------------------------------------
   */
 
@@ -228,7 +238,7 @@ export default function Roster() {
 
   /*
   |--------------------------------------------------------------------------
-  | Fetch whenever week changes
+  | Fetch Whenever Week Changes
   |--------------------------------------------------------------------------
   */
 
@@ -238,7 +248,7 @@ export default function Roster() {
 
   /*
   |--------------------------------------------------------------------------
-  | Refresh roster periodically
+  | Refresh Roster Every Minute
   |--------------------------------------------------------------------------
   */
 
@@ -254,7 +264,7 @@ export default function Roster() {
 
   /*
   |--------------------------------------------------------------------------
-  | Refresh when browser tab becomes active
+  | Refresh When Browser Tab Becomes Active
   |--------------------------------------------------------------------------
   */
 
@@ -300,7 +310,14 @@ export default function Roster() {
 
       const record = rosterMap.get(date);
 
-      const status = record?.rosterStatus || null;
+      /*
+      IMPORTANT:
+      status = P / WO / L / H / HD / A / OD / WFH / SL
+
+      rosterStatus = active / inactive
+      */
+
+      const status = record?.status || null;
 
       const config = status ? STATUS_CONFIG[status] : null;
 
@@ -336,7 +353,7 @@ export default function Roster() {
 
   const stats = useMemo(() => {
     const count = (status: RosterStatus) => {
-      return roster.filter((record) => record.rosterStatus === status).length;
+      return roster.filter((record) => record.status === status).length;
     };
 
     return [
@@ -398,50 +415,53 @@ export default function Roster() {
   |--------------------------------------------------------------------------
   */
 
-const columns = useMemo(
-  () => [
-    {
-      title: 'Date',
-      dataIndex: 'date',
-      key: 'date',
-      width: '33.33%',
-      render: (date: string) => <span className="font-medium text-slate-700">{date}</span>,
-    },
+  const columns = useMemo(
+    () => [
+      {
+        title: 'Date',
+        dataIndex: 'date',
+        key: 'date',
+        width: '33.33%',
 
-    {
-      title: 'Day',
-      dataIndex: 'day',
-      key: 'day',
-      width: '33.33%',
-      render: (day: string) => <span className="text-slate-600">{day}</span>,
-    },
-
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      width: '33.33%',
-      render: (
-        status: RosterStatus | null,
-        record: {
-          label: string;
-          color: string;
-        }
-      ) => {
-        if (!status) {
-          return <Tag className="px-3 py-1">Not Assigned</Tag>;
-        }
-
-        return (
-          <Tag color={record.color} className="px-3 py-1 text-sm">
-            {status} - {record.label}
-          </Tag>
-        );
+        render: (date: string) => <span className="font-medium text-slate-700">{date}</span>,
       },
-    },
-  ],
-  []
-);
+
+      {
+        title: 'Day',
+        dataIndex: 'day',
+        key: 'day',
+        width: '33.33%',
+
+        render: (day: string) => <span className="text-slate-600">{day}</span>,
+      },
+
+      {
+        title: 'Status',
+        dataIndex: 'status',
+        key: 'status',
+        width: '33.33%',
+
+        render: (
+          status: RosterStatus | null,
+          record: {
+            label: string;
+            color: string;
+          }
+        ) => {
+          if (!status) {
+            return <Tag className="px-3 py-1">Not Assigned</Tag>;
+          }
+
+          return (
+            <Tag color={record.color} className="px-3 py-1 text-sm">
+              {status} - {record.label}
+            </Tag>
+          );
+        },
+      },
+    ],
+    []
+  );
 
   /*
   |--------------------------------------------------------------------------
@@ -455,6 +475,7 @@ const columns = useMemo(
 
       <div className="flex flex-col gap-8">
         {/* Header */}
+
         <div>
           <Title level={2} className="!mb-1">
             My Work Schedule
@@ -468,6 +489,7 @@ const columns = useMemo(
         </div>
 
         {/* Weekly Calendar */}
+
         <Card
           title={
             <div className="flex items-center gap-2">
@@ -504,9 +526,13 @@ const columns = useMemo(
                 }}
               >
                 <div className="text-center">
+                  {/* Day */}
+
                   <div className={item.isToday ? 'font-semibold text-blue-600' : ''}>
                     <Text type="secondary">{item.day}</Text>
                   </div>
+
+                  {/* Date */}
 
                   <div
                     className={`
@@ -517,9 +543,13 @@ const columns = useMemo(
                     {item.dateNumber}
                   </div>
 
+                  {/* Month */}
+
                   <Text type="secondary" className="mb-3 block">
                     {item.month}
                   </Text>
+
+                  {/* Status */}
 
                   {item.status ? (
                     <Tag color={item.color}>
@@ -528,6 +558,8 @@ const columns = useMemo(
                   ) : (
                     <Tag>Not Assigned</Tag>
                   )}
+
+                  {/* Today */}
 
                   {item.isToday && (
                     <div className="mt-3">
@@ -543,6 +575,7 @@ const columns = useMemo(
         </Card>
 
         {/* Summary */}
+
         <Row gutter={[20, 20]}>
           {stats.map((item) => (
             <Col xs={12} md={6} key={item.title}>
@@ -562,10 +595,12 @@ const columns = useMemo(
         </Row>
 
         {/* Upcoming Schedule */}
+
         <Card
           title={
             <div className="flex items-center gap-2">
               <ClockCircleOutlined className="text-lg" />
+
               <span>Upcoming Schedule</span>
             </div>
           }

@@ -7,9 +7,24 @@ import { connectDB } from '@/lib/mongodb';
 
 import Attendance from '@/models/attendance/Attendance';
 import AttendanceLog from '@/models/attendance/AttendanceLog';
+import Roster from '@/models/attendance/Roster';
 import User from '@/models/user/User';
 
 const MAX_SESSION_HOURS = 10;
+
+type AttendanceStatus = 'P' | 'WO' | 'L' | 'H' | 'HD' | 'A' | 'OD' | 'WFH' | 'SL';
+
+/*
+|--------------------------------------------------------------------------
+| Admin Protected Roster Statuses
+|--------------------------------------------------------------------------
+|
+| These statuses are assigned manually by admin and should not be
+| overwritten by employee login/logout working-time calculations.
+|--------------------------------------------------------------------------
+*/
+
+const PROTECTED_ROSTER_STATUSES: AttendanceStatus[] = ['WO', 'L', 'H', 'OD', 'WFH'];
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,9 +106,6 @@ export async function POST(req: NextRequest) {
     |--------------------------------------------------------------------------
     | ATTENDANCE
     |--------------------------------------------------------------------------
-    |
-    | Admin does not create attendance.
-    |
     */
 
     if (user.role !== 'admin') {
@@ -130,6 +142,13 @@ export async function POST(req: NextRequest) {
       |--------------------------------------------------------------------------
       | Create Today's Attendance
       |--------------------------------------------------------------------------
+      |
+      | IMPORTANT:
+      |
+      | Attendance does NOT contain a status field anymore.
+      |
+      | Common attendance status is stored in Roster.status.
+      |--------------------------------------------------------------------------
       */
 
       if (!attendance) {
@@ -140,23 +159,37 @@ export async function POST(req: NextRequest) {
 
           am: {
             currentStatus: 'Checked Out',
+
             checkIn: null,
+
             checkOut: null,
+
             workingMinutes: 0,
+
             breakMinutes: 0,
+
             lastActivityAt: null,
+
             autoLoggedOut: false,
+
             autoLogoutAt: null,
           },
 
           pm: {
             currentStatus: 'Checked Out',
+
             checkIn: null,
+
             checkOut: null,
+
             workingMinutes: 0,
+
             breakMinutes: 0,
+
             lastActivityAt: null,
+
             autoLoggedOut: false,
+
             autoLogoutAt: null,
           },
 
@@ -167,8 +200,6 @@ export async function POST(req: NextRequest) {
           workingMinutes: 0,
 
           breakMinutes: 0,
-
-          status: 'Absent',
 
           approvedBy: null,
 
@@ -207,19 +238,11 @@ export async function POST(req: NextRequest) {
 
       /*
       |--------------------------------------------------------------------------
-      | IMPORTANT
+      | Previous Session Totals
       |--------------------------------------------------------------------------
       |
-      | DO NOT RESET:
-      |
-      | session.workingMinutes
-      | session.breakMinutes
-      |
-      | These are the TOTAL AM/PM values.
-      |
-      | Every login/logout is recorded separately
-      | in AttendanceLog.
-      |
+      | DO NOT reset these values.
+      |--------------------------------------------------------------------------
       */
 
       const previousWorkingMinutes = Number(session.workingMinutes || 0);
@@ -266,13 +289,16 @@ export async function POST(req: NextRequest) {
       |--------------------------------------------------------------------------
       | Overall Attendance
       |--------------------------------------------------------------------------
+      |
+      | Attendance only stores session/work information.
+      |
+      | There is NO Attendance.status.
+      |--------------------------------------------------------------------------
       */
 
       attendance.currentStatus = 'Working';
 
       attendance.lastActivityAt = now;
-
-      attendance.status = 'Present';
 
       attendance.updatedBy = user._id;
 
@@ -280,7 +306,7 @@ export async function POST(req: NextRequest) {
 
       /*
       |--------------------------------------------------------------------------
-      | Save
+      | Save Attendance
       |--------------------------------------------------------------------------
       */
 
@@ -288,11 +314,11 @@ export async function POST(req: NextRequest) {
 
       /*
       |--------------------------------------------------------------------------
-      | ALWAYS CREATE IN LOG
+      | Create Attendance Log
       |--------------------------------------------------------------------------
       |
-      | Every login gets its own IN record.
-      |
+      | Every login creates its own IN record.
+      |--------------------------------------------------------------------------
       */
 
       await AttendanceLog.create({
@@ -310,6 +336,83 @@ export async function POST(req: NextRequest) {
 
         createdBy: user._id,
       });
+
+      /*
+      |--------------------------------------------------------------------------
+      | ROSTER
+      |--------------------------------------------------------------------------
+      |
+      | Roster.status is the SINGLE common attendance status.
+      |
+      | Do NOT immediately set P/HD/SL here because working time is
+      | currently zero at the moment of login.
+      |
+      | If admin has assigned a protected status:
+      |
+      | WO / L / H / OD / WFH
+      |
+      | preserve it.
+      |
+      | If there is no roster or the existing status is an
+      | attendance-generated status, leave it for the logout/
+      | attendance calculation to update.
+      |--------------------------------------------------------------------------
+      */
+
+      const roster = await Roster.findOne({
+        employee: user._id,
+
+        date: {
+          $gte: startOfDay,
+          $lte: endOfDay,
+        },
+
+        rosterStatus: 'active',
+      });
+
+      if (roster) {
+        const currentRosterStatus = roster.status as AttendanceStatus;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Protected Admin Status
+        |--------------------------------------------------------------------------
+        */
+
+        if (PROTECTED_ROSTER_STATUSES.includes(currentRosterStatus)) {
+          /*
+          |--------------------------------------------------------------------------
+          | Keep:
+          |
+          | WO
+          | L
+          | H
+          | OD
+          | WFH
+          |--------------------------------------------------------------------------
+          */
+          // Nothing to update.
+        } else {
+          /*
+          |--------------------------------------------------------------------------
+          | Attendance Status
+          |--------------------------------------------------------------------------
+          |
+          | Do not force P here.
+          |
+          | The logout/working-time logic will calculate:
+          |
+          | < 5h  = SL
+          | 5-7h  = HD
+          | 7h+   = P
+          |--------------------------------------------------------------------------
+          */
+
+          roster.updatedBy = user._id;
+
+          await roster.save();
+        }
+      }
     }
 
     /*
@@ -346,7 +449,7 @@ export async function POST(req: NextRequest) {
     | JWT = 7 days
     |
     | Attendance session = maximum 10 hours
-    |
+    |--------------------------------------------------------------------------
     */
 
     response.cookies.set('token', token, {

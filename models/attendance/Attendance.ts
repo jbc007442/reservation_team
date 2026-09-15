@@ -42,7 +42,7 @@ const SessionSchema = new Schema(
 
     /*
     |--------------------------------------------------------------------------
-    | Current Status
+    | Current Session Status
     |--------------------------------------------------------------------------
     */
 
@@ -81,7 +81,7 @@ const SessionSchema = new Schema(
     |--------------------------------------------------------------------------
     | Break Minutes
     |--------------------------------------------------------------------------
-    | Total breaks for this session.
+    | Total break time for this session.
     |--------------------------------------------------------------------------
     */
 
@@ -106,7 +106,7 @@ const SessionSchema = new Schema(
     |--------------------------------------------------------------------------
     | Automatic Logout Time
     |--------------------------------------------------------------------------
-    | checkIn + 10 hours
+    | Maximum session time = 10 hours from check-in.
     |--------------------------------------------------------------------------
     */
 
@@ -123,6 +123,24 @@ const SessionSchema = new Schema(
 /*
 |--------------------------------------------------------------------------
 | Attendance Schema
+|--------------------------------------------------------------------------
+| Attendance stores ACTUAL login/session information.
+|
+| Common attendance status is managed by Roster.rosterStatus.
+|
+| Roster:
+|   P    = Present
+|   WO   = Weekly Off
+|   L    = Leave
+|   H    = Holiday
+|   HD   = Half Day
+|   A    = Absent
+|   OD   = On Duty
+|   WFH  = Work From Home
+|   SL   = Short Login
+|
+| Attendance:
+|   Actual login, logout, break and working-time information.
 |--------------------------------------------------------------------------
 */
 
@@ -181,6 +199,8 @@ const AttendanceSchema = new Schema(
     |--------------------------------------------------------------------------
     | Overall Current Status
     |--------------------------------------------------------------------------
+    | This represents the employee's current login state.
+    |--------------------------------------------------------------------------
     */
 
     currentStatus: {
@@ -205,7 +225,7 @@ const AttendanceSchema = new Schema(
     |--------------------------------------------------------------------------
     | Total Working Minutes
     |--------------------------------------------------------------------------
-    | AM + PM
+    | AM + PM actual working time.
     |--------------------------------------------------------------------------
     */
 
@@ -219,7 +239,7 @@ const AttendanceSchema = new Schema(
     |--------------------------------------------------------------------------
     | Total Break Minutes
     |--------------------------------------------------------------------------
-    | AM + PM
+    | AM + PM total break time.
     |--------------------------------------------------------------------------
     */
 
@@ -227,19 +247,6 @@ const AttendanceSchema = new Schema(
       type: Number,
       default: 0,
       min: 0,
-    },
-
-    /*
-    |--------------------------------------------------------------------------
-    | Attendance Status
-    |--------------------------------------------------------------------------
-    */
-
-    status: {
-      type: String,
-      enum: ['Present', 'Absent', 'Half Day', 'Short Login', 'Leave', 'Holiday', 'Weekly Off'],
-      default: 'Absent',
-      index: true,
     },
 
     /*
@@ -303,11 +310,6 @@ AttendanceSchema.index(
 | Employee Attendance Queries
 |--------------------------------------------------------------------------
 */
-
-AttendanceSchema.index({
-  employee: 1,
-  status: 1,
-});
 
 AttendanceSchema.index({
   employee: 1,
