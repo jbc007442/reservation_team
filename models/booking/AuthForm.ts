@@ -1,3 +1,4 @@
+import './Booking';
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 /* ---------------- Passenger ---------------- */
