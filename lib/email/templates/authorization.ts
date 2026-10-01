@@ -566,7 +566,7 @@ ${booking.bookingNo}
       box-shadow:0 8px 20px rgba(37,99,235,.25);
     "
   >
-    I AUTHORIZE
+    AUTHORIZE
   </a>
 </div>
 
